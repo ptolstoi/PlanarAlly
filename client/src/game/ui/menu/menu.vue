@@ -14,6 +14,7 @@ import { Note } from "@/game/comm/types/general";
 import { layerManager } from "@/game/layers/manager";
 import { gameStore } from "@/game/store";
 import { EventBus } from "../../event-bus";
+import { socket } from '@/game/api/socket';
 
 @Component({
     components: {
@@ -99,6 +100,10 @@ export default class MenuBar extends Vue {
             return "";
         }
     }
+
+    reloadAssets(): void {
+        socket.emit("Asset.List.Get")
+    }
 }
 </script>
 
@@ -111,14 +116,22 @@ export default class MenuBar extends Vue {
                 <button class="menu-accordion" v-t="'common.assets'"></button>
                 <div id="menu-assets" class="menu-accordion-panel">
                     <input id="asset-search" v-if="assets" v-model="assetSearch" :placeholder="$t('common.search')" />
-                    <a
-                        class="actionButton"
-                        :href="baseAdjust('/assets')"
-                        target="blank"
-                        :title="$t('game.ui.menu.menu.open_asset_manager')"
-                    >
-                        <font-awesome-icon icon="external-link-alt" />
-                    </a>
+                    <div
+                            class="actionButton">
+                        <a
+                            :href="baseAdjust('/assets')"
+                            target="blank"
+                            :title="$t('game.ui.menu.menu.open_asset_manager')"
+                        >
+                            <font-awesome-icon icon="external-link-alt" />
+                        </a>
+                        <a
+                            @click="reloadAssets"
+                            style="margin-left: 5px"
+                        >
+                            <font-awesome-icon icon="circle" />
+                        </a>
+                    </div>
                     <div class="directory" id="menu-tokens">
                         <asset-node :asset="assets" :search="assetSearch"></asset-node>
                         <div v-if="Object.keys(assets).length === 1 && assets['__files'].length <= 0">
@@ -250,7 +263,7 @@ DIRECTORY.CSS changes
 .actionButton {
     margin: 5px;
     align-self: flex-end;
-    margin-bottom: -30px;
+    margin-bottom: -15px;
     z-index: 11;
 }
 

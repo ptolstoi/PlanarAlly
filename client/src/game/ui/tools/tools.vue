@@ -77,9 +77,11 @@ export default class Tools extends Vue {
             [ToolName.Vision]: this.$refs.visionTool,
         };
         EventBus.$on("ToolMode.Toggle", this.toggleMode);
+        window.addEventListener("keyup", this.onKeyUp);
     }
 
     beforeDestroy(): void {
+        window.removeEventListener("keyup", this.onKeyUp);
         EventBus.$off("ToolMode.Toggle");
     }
 
@@ -103,6 +105,7 @@ export default class Tools extends Vue {
         [ToolName.Filter, {}],
         [ToolName.Vision, {}],
     ];
+    shortcuts = ["q", "w", "e", "r", "t"];
 
     get componentMap(): { [key in ToolName]: InstanceType<typeof Tool> } {
         return this.componentmap_;
@@ -120,7 +123,7 @@ export default class Tools extends Vue {
         return this.mode === "Build" ? this.buildTools : this.playTools;
     }
 
-    get visibleTools(): string[] {
+    get visibleTools(): ToolName[] {
         return this.tools.map(t => t[0]).filter(t => (!this.dmTools.includes(t) || this.IS_DM) && this.toolVisible(t));
     }
 
@@ -288,6 +291,22 @@ export default class Tools extends Vue {
         }
     }
 
+    
+    onKeyUp(event: KeyboardEvent): void {
+        if (["INPUT", "TEXTAREA"].includes((event.target as HTMLElement).tagName)) return;
+
+        if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
+        
+
+        const shortcutIndex = this.shortcuts.indexOf(event.key);
+
+        const tools = this.visibleTools;
+
+        if (shortcutIndex === -1 || shortcutIndex >= tools.length) return;
+
+        this.currentTool = tools[shortcutIndex];
+    }
+
     toggleMode(): void {
         this.mode = this.mode === "Build" ? "Play" : "Build";
         const tool = this.componentMap[this.currentTool];
@@ -338,12 +357,13 @@ export default class Tools extends Vue {
         <div id="toolselect">
             <ul>
                 <li
-                    v-for="tool in visibleTools"
+                    v-for="(tool, i) in visibleTools"
                     :key="tool"
                     class="tool"
                     :class="{ 'tool-selected': currentTool === tool }"
                     :ref="tool + '-selector'"
                     @mousedown="currentTool = tool"
+                    :title="`${getToolWord(tool)} (${shortcuts[i]})`"
                 >
                     <a href="#">{{ getToolWord(tool) }}</a>
                 </li>

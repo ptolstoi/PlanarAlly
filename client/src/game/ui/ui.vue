@@ -97,7 +97,7 @@ export default class UI extends Vue {
         const uiEl = this.$el as HTMLDivElement;
         let i = 0;
         const interval = setInterval(() => {
-            i += 10;
+            i += 20;
             uiEl.style.gridTemplateColumns = `${this.visible.settings ? i : 200 - i}px repeat(3, 1fr)`;
             if (i >= 200) {
                 clearInterval(interval);

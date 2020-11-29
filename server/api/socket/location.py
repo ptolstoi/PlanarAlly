@@ -68,6 +68,17 @@ async def _load_location(sid: str):
 
     await load_location(sid, pr.active_location, complete=True)
 
+@sio.on("Asset.List.Get", namespace=GAME_NS)
+@auth.login_required(app, sio)
+async def _load_location(sid: str):
+    pr: PlayerRoom = game_state.get(sid)
+
+    await sio.emit(
+        "Asset.List.Set",
+        Asset.get_user_structure(pr.player),
+        room=sid,
+        namespace=GAME_NS,
+    )
 
 @auth.login_required(app, sio)
 async def load_location(sid: str, location: Location, *, complete=False):

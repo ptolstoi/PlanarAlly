@@ -19,6 +19,15 @@ import { sendCreateFloor, sendRemoveFloor, sendFloorSetVisible } from "../api/em
 })
 export default class FloorSelect extends Vue {
     selected = false;
+    shortcuts = ["1", "2", "3", "4", "5"];
+
+    mounted(): void {
+        window.addEventListener("keyup", this.onKeyUp);
+    }
+
+    beforeDestroy(): void {
+        window.removeEventListener("keyup", this.onKeyUp);
+    }
 
     get IS_DM(): boolean {
         return gameStore.IS_DM || gameStore.FAKE_PLAYER;
@@ -117,6 +126,22 @@ export default class FloorSelect extends Vue {
                 return "";
         }
     }
+
+    onKeyUp(event: KeyboardEvent): void {
+        if (["INPUT", "TEXTAREA"].includes((event.target as HTMLElement).tagName)) return;
+
+        if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
+        
+        if (event.code.startsWith("Numpad")) return;
+
+        const shortcutIndex = this.shortcuts.indexOf(event.key);
+
+        const layers = this.layers;
+
+        if (shortcutIndex === -1 || shortcutIndex >= layers.length) return;
+
+        this.selectLayer(layers[shortcutIndex]);
+    }
 }
 </script>
 
@@ -160,11 +185,12 @@ export default class FloorSelect extends Vue {
         </draggable>
         <div style="display:contents" v-show="layers.length > 1">
             <div
-                v-for="layer in layers"
+                v-for="(layer, i) in layers"
                 class="layer"
                 :key="layer"
                 :class="{ 'layer-selected': layer === selectedLayer }"
                 @mousedown="selectLayer(layer)"
+                :title="`${getLayerWord(layer)} (${shortcuts[i]})`"
             >
                 <a href="#">{{ getLayerWord(layer) }}</a>
             </div>

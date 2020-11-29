@@ -72,6 +72,8 @@ export default class SelectTool extends Tool implements ToolBasics {
 
     snappedToPoint = false;
 
+    lastTimeMouseUp = 0;
+
     // Life cycle
 
     mounted(): void {
@@ -321,6 +323,7 @@ export default class SelectTool extends Tool implements ToolBasics {
         let selection = layer.getSelection();
 
         if (selection.some(s => s.isLocked)) return;
+        const now = new Date().getTime();
 
         if (this.mode === SelectOperations.GroupSelect) {
             if (event.ctrlKey) {
@@ -361,7 +364,14 @@ export default class SelectTool extends Tool implements ToolBasics {
             let recalcVision = false;
             let recalcMovement = false;
 
-            if (this.mode === SelectOperations.Drag) {
+            if(this.mode === SelectOperations.Drag && now - this.lastTimeMouseUp < 300) {
+                EventBus.$emit("EditDialog.Open", layer.getSelection()[0]);
+
+                this.lastTimeMouseUp = 0;
+            }
+            else if (this.mode === SelectOperations.Drag) {
+                this.lastTimeMouseUp = now;
+
                 const updateList = [];
                 for (const sel of selection) {
                     if (!sel.ownedBy({ movementAccess: true })) continue;

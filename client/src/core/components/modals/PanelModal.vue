@@ -17,6 +17,24 @@ export default class PanelModal extends Vue {
 
     selection = 0;
 
+    mounted(): void {
+        window.addEventListener("keyup", this.onKeyUp);
+    }
+
+    beforeDestroy(): void {
+        window.removeEventListener("keyup", this.onKeyUp);
+    }
+
+    onKeyUp(event: KeyboardEvent): void {
+        if (["INPUT", "TEXTAREA"].includes((event.target as HTMLElement).tagName)) return;
+
+        if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
+
+        if (event.key === "Escape") {
+            this.hideModal();
+        }
+    }
+
     handleClick(event: { target: HTMLElement }): void {
         const child = event.target.firstElementChild;
         if (child instanceof HTMLInputElement) {
