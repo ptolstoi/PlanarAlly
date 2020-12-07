@@ -24,6 +24,8 @@ import { Watch } from "vue-property-decorator";
 import { requestAssetOptions } from "./api/emits/asset";
 import { BaseTemplate } from "./comm/types/templates";
 
+const throttledScollZoom = throttle(scrollZoom, 200, { leading: false });
+
 @Component({
     components: {
         "prompt-dialog": Prompt,
@@ -91,7 +93,7 @@ export default class Game extends Vue {
     // Window events
 
     zoom(event: WheelEvent): void {
-        throttle(scrollZoom)(event);
+        throttledScollZoom(event);
     }
 
     resizeWindow(): void {
