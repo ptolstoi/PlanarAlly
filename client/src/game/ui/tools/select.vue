@@ -52,7 +52,7 @@ export enum SelectFeatures {
 
 const start = new GlobalPoint(-1000, -1000);
 
-const ANGLE_SNAP = (45 * Math.PI) / 180; // Calculate 45 degrees in radians just once
+const ANGLE_SNAP = (45 * Math.PI) / 180;
 
 const rulerPermission = [{ name: ToolName.Ruler, features: { enabled: [RulerFeatures.All] }, early: true }];
 
@@ -68,8 +68,6 @@ export default class SelectTool extends Tool implements ToolBasics {
     resizePoint = 0;
     originalResizePoints: number[][] = [];
     deltaChanged = false;
-    // Because we never drag from the asset's (0, 0) coord and want a smoother drag experience
-    // we keep track of the actual offset within the asset.
     dragRay = new Ray<LocalPoint>(new LocalPoint(0, 0), new Vector(0, 0));
     selectionStartPoint = start;
     selectionHelper: Rect | undefined = undefined;
@@ -116,17 +114,13 @@ export default class SelectTool extends Tool implements ToolBasics {
         }
     }
 
-    // Life cycle
-
     mounted(): void {
         EventBus.$on("SelectionInfo.Shapes.Set", (shapes: Shape[]) => {
             this.removeRotationUi();
-            // We don't have feature information, might want to store this as a property instead ?
             if (this.$parent.mode === "Build" && shapes.length > 0) this.createRotationUi({});
         });
         EventBus.$on("Select.RotationHelper.Reset", () => {
             this.removeRotationUi();
-            // We don't have feature information, might want to store this as a property instead ?
             if (this.$parent.mode === "Build") this.createRotationUi({});
         });
         this.setToolPermissions();
@@ -148,7 +142,6 @@ export default class SelectTool extends Tool implements ToolBasics {
     }
 
     onDown(lp: LocalPoint, event: MouseEvent | TouchEvent, features: ToolFeatures<SelectFeatures>): void {
-        // if we only have context capabilities, immediately skip
         if (features.enabled?.length === 1 && features.enabled[0] === SelectFeatures.Context) return;
 
         const gp = l2g(lp);
@@ -163,7 +156,6 @@ export default class SelectTool extends Tool implements ToolBasics {
 
         let hit = false;
 
-        // The selectionStack allows for lower positioned objects that are selected to have precedence during overlap.
         const layerSelection = layer.getSelection({ includeComposites: false });
         let selectionStack: readonly Shape[];
         if (this.hasFeature(SelectFeatures.ChangeSelection, features)) {
@@ -199,7 +191,6 @@ export default class SelectTool extends Tool implements ToolBasics {
                 this.resizePoint = shape.getPointIndex(gp, l2gz(5));
                 if (this.resizePoint >= 0) {
                     this.setToolPermissions([]);
-                    // Resize case, a corner is selected
                     layer.setSelection(shape);
                     this.removeRotationUi();
                     this.createRotationUi(features);
@@ -230,13 +221,11 @@ export default class SelectTool extends Tool implements ToolBasics {
                     this.removeRotationUi();
                     this.createRotationUi(features);
                 }
-                // Drag case, a shape is selected
                 if (this.hasFeature(SelectFeatures.Drag, features)) {
                     this.mode = SelectOperations.Drag;
                     const localRefPoint = g2l(shape.refPoint);
                     this.dragRay = Ray.fromPoints(localRefPoint, lp);
 
-                    // don't use layerSelection here as it can be outdated by the pushSelection setSelection above
                     this.operationList = { type: "movement", shapes: [] };
                     for (const shape of layer.getSelection({ includeComposites: false }))
                         this.operationList.shapes.push({ uuid: shape.uuid, from: shape.refPoint.asArray(), to: [] });
@@ -247,7 +236,6 @@ export default class SelectTool extends Tool implements ToolBasics {
             }
         }
 
-        // GroupSelect case, draw a selection box to select multiple shapes
         if (!hit) {
             this.setToolPermissions([]);
             if (!this.hasFeature(SelectFeatures.ChangeSelection, features)) return;
@@ -285,11 +273,9 @@ export default class SelectTool extends Tool implements ToolBasics {
     }
 
     onMove(lp: LocalPoint, event: MouseEvent | TouchEvent, features: ToolFeatures<SelectFeatures>): void {
-        // if we only have context capabilities, immediately skip
         if (features.enabled?.length === 1 && features.enabled[0] === SelectFeatures.Context) return;
 
         const gp = l2g(lp);
-        // We require move for the resize and rotate cursors
         if (
             !this.active &&
             !(this.hasFeature(SelectFeatures.Resize, features) || this.hasFeature(SelectFeatures.Rotate, features))
@@ -303,12 +289,11 @@ export default class SelectTool extends Tool implements ToolBasics {
         }
 
         const layerSelection = layer.getSelection({ includeComposites: false });
-        if (layerSelection.some((s) => s.isLocked)) return;
+        if (layerSelection.some(s => s.isLocked)) return;
 
         this.deltaChanged = false;
 
         if (this.mode === SelectOperations.GroupSelect) {
-            // Currently draw on active layer
             const endPoint = gp;
 
             this.selectionHelper!.w = Math.abs(endPoint.x - this.selectionStartPoint.x);
@@ -325,7 +310,6 @@ export default class SelectTool extends Tool implements ToolBasics {
             const ogDelta = delta;
             if (this.mode === SelectOperations.Drag) {
                 if (ogDelta.length() === 0) return;
-                // If we are on the tokens layer do a movement block check.
                 if (layer.name === "tokens" && !(event.shiftKey && gameStore.IS_DM)) {
                     for (const sel of layerSelection) {
                         if (!sel.ownedBy(false, { movementAccess: true })) continue;
@@ -372,10 +356,7 @@ export default class SelectTool extends Tool implements ToolBasics {
     }
 
     onUp(lp: LocalPoint, event: MouseEvent | TouchEvent, features: ToolFeatures<SelectFeatures>): void {
-        // if we only have context capabilities, immediately skip
         if (features.enabled?.length === 1 && features.enabled[0] === SelectFeatures.Context) {
-            // When using pan during select, the dragray will use a wrong lp to to the drag calculation in move
-            // Maybe consider using a gp for the ray instead to avoid this in the future ?
             this.dragRay = Ray.fromPoints(this.dragRay.origin, lp);
             return;
         }
@@ -391,12 +372,11 @@ export default class SelectTool extends Tool implements ToolBasics {
 
         let layerSelection = layer.getSelection({ includeComposites: false });
 
-        if (layerSelection.some((s) => s.isLocked)) return;
+        if (layerSelection.some(s => s.isLocked)) return;
         const now = new Date().getTime();
 
         if (this.mode === SelectOperations.GroupSelect) {
             if (event.ctrlKey) {
-                // If either control or shift are pressed, do not remove selection
             } else {
                 layer.clearSelection();
             }
@@ -405,7 +385,7 @@ export default class SelectTool extends Tool implements ToolBasics {
                 if (!shape.options.has("preFogShape") && (shape.options.get("skipDraw") ?? false)) continue;
                 if (!shape.ownedBy(false, { movementAccess: true })) continue;
                 if (!shape.visibleInCanvas(layer.canvas, { includeAuras: false })) continue;
-                if (layerSelection.some((s) => s.uuid === shape.uuid)) continue;
+                if (layerSelection.some(s => s.uuid === shape.uuid)) continue;
 
                 if (shape.points.length > 1) {
                     for (let i = 0; i < shape.points.length; i++) {
@@ -415,7 +395,7 @@ export default class SelectTool extends Tool implements ToolBasics {
                         );
                         if (cbbox.containsRay(ray).hit) {
                             layer.pushSelection(shape);
-                            i = shape.points.length; // break out of the inner loop
+                            i = shape.points.length;
                         }
                     }
                 } else {
@@ -430,8 +410,7 @@ export default class SelectTool extends Tool implements ToolBasics {
             layer.removeShape(this.selectionHelper!, SyncMode.NO_SYNC, true);
             this.selectionHelper = undefined;
 
-            if (layerSelection.some((s) => !s.isLocked))
-                layer.setSelection(...layerSelection.filter((s) => !s.isLocked));
+            if (layerSelection.some(s => !s.isLocked)) layer.setSelection(...layerSelection.filter(s => !s.isLocked));
 
             if (
                 layerSelection.length > 0 &&
@@ -446,12 +425,11 @@ export default class SelectTool extends Tool implements ToolBasics {
             let recalcVision = false;
             let recalcMovement = false;
 
-            if(this.mode === SelectOperations.Drag && now - this.lastTimeMouseUp < 300) {
-                EventBus.$emit("EditDialog.Open", layer.getSelection()[0]);
+            if (this.mode === SelectOperations.Drag && now - this.lastTimeMouseUp < 300) {
+                EventBus.$emit("EditDialog.Open", layerSelection[0]);
 
                 this.lastTimeMouseUp = 0;
-            }
-            else if (this.mode === SelectOperations.Drag) {
+            } else if (this.mode === SelectOperations.Drag) {
                 this.lastTimeMouseUp = now;
 
                 const updateList = [];
@@ -610,7 +588,6 @@ export default class SelectTool extends Tool implements ToolBasics {
             }
         }
 
-        // Check if any other shapes are under the mouse
         for (let i = layer.size({ includeComposites: false }) - 1; i >= 0; i--) {
             const shape = layer.getShapes({ includeComposites: false })[i];
             if (shape.contains(globalMouse)) {
@@ -620,7 +597,6 @@ export default class SelectTool extends Tool implements ToolBasics {
                 return;
             }
         }
-        // Fallback to default context menu
         this.$parent.$refs.defaultcontext.open(event);
     }
 
@@ -638,7 +614,6 @@ export default class SelectTool extends Tool implements ToolBasics {
         for (const sel of layerSelection) {
             const resizePoint = sel.getPointIndex(globalMouse, l2gz(3));
             if (resizePoint < 0) {
-                // test rotate case
                 if (this.rotationUiActive) {
                     const anchor = this.rotationAnchor!.points[1];
                     if (equalPoints(anchor, globalMouse.asArray(), 10)) {
@@ -675,7 +650,7 @@ export default class SelectTool extends Tool implements ToolBasics {
             bbox = layerSelection[0].getBoundingBox();
         } else {
             bbox = layerSelection
-                .map((s) => s.getAABB())
+                .map(s => s.getAABB())
                 .reduce((acc: BoundingRect, val: BoundingRect) => acc.union(val))
                 .expand(new Vector(-50, -50));
         }

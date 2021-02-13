@@ -6,6 +6,7 @@ import { mapState } from "vuex";
 import ColorPicker from "@/core/components/colorpicker.vue";
 import LanguageSelect from "@/core/components/languageSelect.vue";
 import { baseAdjust, uuidv4 } from "@/core/utils";
+import { socket } from "@/game/api/socket";
 import { Note } from "@/game/comm/types/general";
 import { layerManager } from "@/game/layers/manager";
 import { gameStore } from "@/game/store";
@@ -14,7 +15,6 @@ import NoteDialog from "@/game/ui/note.vue";
 
 import { AssetList } from "../../../core/comm/types";
 import { EventBus } from "../../event-bus";
-import { socket } from '@/game/api/socket';
 
 @Component({
     components: {
@@ -115,7 +115,7 @@ export default class MenuBar extends Vue {
     }
 
     reloadAssets(): void {
-        socket.emit("Asset.List.Get")
+        socket.emit("Asset.List.Get");
     }
 }
 </script>
@@ -130,8 +130,7 @@ export default class MenuBar extends Vue {
                 <button class="menu-accordion" v-t="'common.assets'"></button>
                 <div id="menu-assets" class="menu-accordion-panel">
                     <input id="asset-search" v-model="assetSearch" :placeholder="$t('common.search')" />
-                    <div
-                            class="actionButton">
+                    <div class="actionButton">
                         <a
                             class="actionButton"
                             :href="baseAdjust('/assets')"
@@ -140,10 +139,7 @@ export default class MenuBar extends Vue {
                         >
                             <font-awesome-icon icon="external-link-alt" />
                         </a>
-                        <a
-                            @click="reloadAssets"
-                            style="margin-left: 5px"
-                        >
+                        <a @click="reloadAssets" style="margin-left: 5px">
                             <font-awesome-icon icon="circle" />
                         </a>
                     </div>
