@@ -1,4 +1,5 @@
 import { GlobalPoint, Point, Ray, Vector } from "@/game/geom";
+
 import { g2lx, g2ly } from "../../units";
 import { rotateAroundPoint } from "../../utils";
 
@@ -99,7 +100,9 @@ export class BoundingRect {
         );
     }
 
-    intersectP(ray: Ray<Point>, invDir: Vector, dirIsNeg: boolean[]): { hit: boolean; min: number; max: number } {
+    containsRay(ray: Ray<Point>): { hit: boolean; min: number; max: number } {
+        const invDir = ray.direction.inverse();
+        const dirIsNeg = [invDir.x < 0, invDir.y < 0];
         let txmin = invDir.x * (this.getDiagCorner(dirIsNeg[0]).x - ray.origin.x);
         let txmax = invDir.x * (this.getDiagCorner(!dirIsNeg[0]).x - ray.origin.x);
         const tymin = invDir.y * (this.getDiagCorner(dirIsNeg[1]).y - ray.origin.y);

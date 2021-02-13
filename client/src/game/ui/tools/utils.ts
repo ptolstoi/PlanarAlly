@@ -13,9 +13,10 @@ export enum ToolName {
     Map = "Map",
     Filter = "Filter",
     Vision = "Vision",
+    Spell = "Spell",
 }
 
-export type ToolPermission = { name: ToolName; features: ToolFeatures };
+export type ToolPermission = { name: ToolName; features: ToolFeatures; early?: boolean };
 export type ToolFeatures<T = number> = { enabled?: T[]; disabled?: T[] };
 
 // First go through each shape in the selection and see if the delta has to be truncated due to movement blockers

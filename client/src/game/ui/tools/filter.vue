@@ -2,13 +2,14 @@
 import Component from "vue-class-component";
 
 import Accordion from "@/core/components/accordion.vue";
-import Tool from "@/game/ui/tools/tool.vue";
-
 import { socket } from "@/game/api/socket";
 import { layerManager } from "@/game/layers/manager";
 import { gameStore } from "@/game/store";
-import { ToolName } from "./utils";
+import Tool from "@/game/ui/tools/tool.vue";
+
+import { SelectFeatures } from "./select.vue";
 import { ToolBasics } from "./ToolBasics";
+import { ToolName, ToolPermission } from "./utils";
 
 @Component({
     components: {
@@ -18,6 +19,10 @@ import { ToolBasics } from "./ToolBasics";
 export default class FilterTool extends Tool implements ToolBasics {
     name = ToolName.Filter;
     active = false;
+
+    get permittedTools(): ToolPermission[] {
+        return [{ name: ToolName.Select, features: { disabled: [SelectFeatures.Resize, SelectFeatures.Rotate] } }];
+    }
 
     get labels(): { [category: string]: [string, string][] } {
         const cat: { [category: string]: [string, string][] } = { "": [] };
@@ -36,7 +41,7 @@ export default class FilterTool extends Tool implements ToolBasics {
     get initalValues(): { [category: string]: string[] } {
         const values: { [category: string]: string[] } = {};
         for (const cat of Object.keys(this.labels)) {
-            values[cat] = gameStore.labelFilters.filter(f => this.labels[cat].map(l => l[0]).includes(f));
+            values[cat] = gameStore.labelFilters.filter((f) => this.labels[cat].map((l) => l[0]).includes(f));
         }
         return values;
     }
@@ -63,7 +68,7 @@ export default class FilterTool extends Tool implements ToolBasics {
 
     updateSelection(data: { title: string; selection: string[] }): void {
         if (!(data.title in this.labels)) return;
-        for (const [uuid, _] of this.labels[data.title]) {
+        for (const [uuid] of this.labels[data.title]) {
             const idx = gameStore.labelFilters.indexOf(uuid);
             const selected = data.selection.includes(uuid);
             if (idx >= 0 && !selected) {
@@ -80,7 +85,7 @@ export default class FilterTool extends Tool implements ToolBasics {
 </script>
 
 <template>
-    <div class="tool-detail" v-if="selected" :style="{ '--detailRight': detailRight, '--detailArrow': detailArrow }">
+    <div class="tool-detail" v-if="selected" :style="{ '--detailRight': detailRight(), '--detailArrow': detailArrow }">
         <div id="accordion-container">
             <accordion
                 v-for="category in categories"

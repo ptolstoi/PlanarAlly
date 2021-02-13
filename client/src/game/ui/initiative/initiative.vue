@@ -4,11 +4,9 @@ import Component from "vue-class-component";
 import draggable from "vuedraggable";
 Vue.component("draggable", draggable);
 
+import ConfirmDialog from "@/core/components/modals/confirm.vue";
 import Modal from "@/core/components/modals/modal.vue";
-
 import { uuidv4 } from "@/core/utils";
-import { socket } from "@/game/api/socket";
-import { InitiativeData, InitiativeEffect } from "@/game/comm/types/general";
 import {
     sendInitiativeUpdate,
     sendInitiativeRemove,
@@ -19,19 +17,30 @@ import {
     sendInitiativeUpdateEffect,
     sendInitiativeRemoveEffect,
 } from "@/game/api/emits/initiative";
+import { socket } from "@/game/api/socket";
+import { InitiativeData, InitiativeEffect } from "@/game/comm/types/general";
 import { EventBus } from "@/game/event-bus";
 import { layerManager } from "@/game/layers/manager";
 import { gameStore } from "@/game/store";
-import { initiativeStore } from "./store";
+
+import { getGroupMembers } from "../../groups";
 import { gameManager } from "../../manager";
+import { Shape } from "../../shapes/shape";
+
+import { initiativeStore } from "./store";
 
 @Component({
     components: {
+        ConfirmDialog,
         Modal,
         draggable,
     },
 })
 export default class Initiative extends Vue {
+    $refs!: {
+        confirmDialog: ConfirmDialog;
+    };
+
     visible = false;
     visionLock = false;
     cameraLock = false;
@@ -73,14 +82,14 @@ export default class Initiative extends Vue {
 
     // Utilities
     getActor(actorId: string): InitiativeData | undefined {
-        return initiativeStore.data.find(a => a.uuid === actorId);
+        return initiativeStore.data.find((a) => a.uuid === actorId);
     }
     owns(actor: InitiativeData): boolean {
         if (gameStore.IS_DM) return true;
         const shape = layerManager.UUIDMap.get(actor.uuid);
         // Shapes that are unknown to this client are hidden from this client but owned by other clients
         if (shape === undefined) return false;
-        return shape.ownedBy({ editAccess: true });
+        return shape.ownedBy(false, { editAccess: true });
     }
     getDefaultEffect(): { uuid: string; name: string; turns: number } {
         return { uuid: uuidv4(), name: this.$t("game.ui.initiative.initiative.new_effect").toString(), turns: 10 };
@@ -92,9 +101,18 @@ export default class Initiative extends Vue {
         sendInitiativeUpdate(data);
     }
     // Events
-    removeInitiative(uuid: string, sync: boolean): void {
-        const d = initiativeStore.data.findIndex(a => a.uuid === uuid);
-        if (d < 0 || initiativeStore.data[d].group) return;
+    async removeInitiative(uuid: string, sync: boolean): Promise<void> {
+        const d = initiativeStore.data.findIndex((a) => a.uuid === uuid);
+        if (d < 0) return;
+        if (initiativeStore.data[d].group) {
+            const continueRemoval = await this.$refs.confirmDialog.open(
+                "Removing initiative",
+                "Are you sure you wish to remove this group from the initiative order?",
+            );
+            if (!continueRemoval) {
+                return;
+            }
+        }
         initiativeStore.data.splice(d, 1);
         if (sync) sendInitiativeRemove(uuid);
         // Remove highlight
@@ -107,12 +125,12 @@ export default class Initiative extends Vue {
     }
     updateOrder(): void {
         if (!gameStore.IS_DM) return;
-        sendInitiativeSet(initiativeStore.data.map(d => d.uuid));
+        sendInitiativeSet(initiativeStore.data.map((d) => d.uuid));
     }
     updateTurn(actorId: string, sync: boolean): void {
         if (!gameStore.IS_DM && sync) return;
         initiativeStore.setCurrentActor(actorId);
-        const actor = initiativeStore.data.find(a => a.uuid === actorId);
+        const actor = initiativeStore.data.find((a) => a.uuid === actorId);
         if (actor === undefined) return;
         if (actor.effects) {
             for (let e = actor.effects.length - 1; e >= 0; e--) {
@@ -124,12 +142,12 @@ export default class Initiative extends Vue {
         }
         if (this.visionLock) {
             if (actorId !== null && gameStore.ownedtokens.includes(actorId)) gameStore.setActiveTokens([actorId]);
-            else gameStore.setActiveTokens([]);
+            else gameStore.setActiveTokens(undefined);
         }
         if (this.cameraLock) {
             if (actorId !== null) {
                 const shape = layerManager.UUIDMap.get(actorId);
-                if (shape?.ownedBy({ visionAccess: true })) {
+                if (shape?.ownedBy(false, { visionAccess: true })) {
                     gameManager.setCenterPosition(shape.center());
                 }
             }
@@ -147,15 +165,23 @@ export default class Initiative extends Vue {
     nextTurn(): void {
         if (!gameStore.IS_DM) return;
         const order = initiativeStore.data;
-        const next = order[(order.findIndex(a => a.uuid === initiativeStore.currentActor) + 1) % order.length];
+        const next = order[(order.findIndex((a) => a.uuid === initiativeStore.currentActor) + 1) % order.length];
         if (initiativeStore.data[0].uuid === next.uuid) this.setRound(initiativeStore.roundCounter + 1, true);
         this.updateTurn(next.uuid, true);
     }
     toggleHighlight(actor: InitiativeData, show: boolean): void {
         const shape = layerManager.UUIDMap.get(actor.uuid);
         if (shape === undefined) return;
-        shape.showHighlight = show;
-        shape.layer.invalidate(true);
+        let shapeArray: Shape[];
+        if (shape.groupId === undefined) {
+            shapeArray = [shape];
+        } else {
+            shapeArray = getGroupMembers(shape.groupId);
+        }
+        for (const sh of shapeArray) {
+            sh.showHighlight = show;
+            sh.layer.invalidate(true);
+        }
     }
     toggleOption(actor: InitiativeData, option: "visible" | "group"): void {
         if (!this.owns(actor)) return;
@@ -171,18 +197,18 @@ export default class Initiative extends Vue {
         sendInitiativeUpdateEffect({ actor: actor.uuid, effect });
     }
     updateEffect(actorId: string, effect: InitiativeEffect, sync: boolean): void {
-        const actor = initiativeStore.data.find(a => a.uuid === actorId);
+        const actor = initiativeStore.data.find((a) => a.uuid === actorId);
         if (actor === undefined) return;
-        const effectIndex = actor.effects.findIndex(e => e.uuid === effect.uuid);
+        const effectIndex = actor.effects.findIndex((e) => e.uuid === effect.uuid);
         if (effectIndex === undefined) return;
         actor.effects[effectIndex] = effect;
         if (sync) this.syncEffect(actor, effect);
         else this.$forceUpdate();
     }
     removeEffect(actorId: string, effect: InitiativeEffect, sync: boolean): void {
-        const actor = initiativeStore.data.find(a => a.uuid === actorId);
+        const actor = initiativeStore.data.find((a) => a.uuid === actorId);
         if (actor === undefined) return;
-        const effectIndex = actor.effects.findIndex(e => e.uuid === effect.uuid);
+        const effectIndex = actor.effects.findIndex((e) => e.uuid === effect.uuid);
         if (effectIndex === undefined) return;
         actor.effects.splice(effectIndex, 1);
         if (sync) sendInitiativeRemoveEffect({ actor: actorId, effect });
@@ -191,8 +217,8 @@ export default class Initiative extends Vue {
     toggleVisionLock(): void {
         this.visionLock = !this.visionLock;
         if (this.visionLock) {
-            this._activeTokens = [...gameStore._activeTokens];
-            if (initiativeStore.currentActor !== null && gameStore.ownedtokens.includes(initiativeStore.currentActor))
+            this._activeTokens = [...gameStore.activeTokens];
+            if (initiativeStore.currentActor && gameStore.ownedtokens.includes(initiativeStore.currentActor))
                 gameStore.setActiveTokens([initiativeStore.currentActor]);
         } else {
             gameStore.setActiveTokens(this._activeTokens);
@@ -205,7 +231,7 @@ export default class Initiative extends Vue {
         const shape = layerManager.UUIDMap.get(actor.uuid);
         if (shape !== undefined) {
             if (shape.nameVisible) return shape.name;
-            if (shape.ownedBy({ editAccess: true })) return shape.name;
+            if (shape.ownedBy(false, { editAccess: true })) return shape.name;
         }
         return actor.source;
     }
@@ -214,6 +240,7 @@ export default class Initiative extends Vue {
 
 <template>
     <modal :visible="visible" @close="visible = false" :mask="false">
+        <ConfirmDialog ref="confirmDialog"></ConfirmDialog>
         <div
             class="modal-header"
             slot="header"
@@ -350,7 +377,7 @@ export default class Initiative extends Vue {
                     class="initiative-bar-button"
                     :class="{ notAllowed: !$store.state.game.IS_DM }"
                     @click="
-                        setRound(0, true);
+                        setRound(1, true);
                         updateTurn($store.state.initiative.data[0].uuid, true);
                     "
                     :title="$t('game.ui.initiative.initiative.reset_round')"
@@ -370,7 +397,7 @@ export default class Initiative extends Vue {
     </modal>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .modal-header {
     background-color: #ff7052;
     padding: 10px;
@@ -405,6 +432,15 @@ export default class Initiative extends Vue {
     margin-bottom: 2px;
     border-radius: 5px;
     border: solid 2px rgba(0, 0, 0, 0);
+
+    &:hover {
+        border: solid 2px #82c8a0;
+    }
+
+    > * {
+        width: 30px;
+        margin-left: 2px;
+    }
 }
 
 .initiative-selected {
@@ -420,15 +456,6 @@ export default class Initiative extends Vue {
     background-color: rgba(130, 200, 160, 0.6);
 }
 
-.initiative-actor:hover {
-    border: solid 2px #82c8a0;
-}
-
-.initiative-actor > * {
-    width: 30px;
-    margin-left: 2px;
-}
-
 .initiative-effect {
     display: none;
     flex-direction: column;
@@ -442,22 +469,23 @@ export default class Initiative extends Vue {
     border-bottom-left-radius: 5px;
     border-bottom-right-radius: 5px;
     border-top: none;
-}
 
-.initiative-effect > * {
-    display: flex;
-    flex-direction: row;
-    justify-content: flex-end;
-}
+    > * {
+        display: flex;
+        flex-direction: row;
+        justify-content: flex-end;
 
-.initiative-effect > * > * {
-    border: none;
-    background-color: inherit;
-    text-align: right;
-    min-width: 10px;
-}
-.initiative-effect > * > *:first-child {
-    margin-left: 0;
+        > * {
+            border: none;
+            background-color: inherit;
+            text-align: right;
+            min-width: 10px;
+
+            &:first-child {
+                margin-left: 0;
+            }
+        }
+    }
 }
 
 #initiative-bar {

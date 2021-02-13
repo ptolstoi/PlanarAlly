@@ -1,36 +1,49 @@
 <script lang="ts">
 import Vue from "vue";
 import Component from "vue-class-component";
-
-import { mapState } from "vuex";
 import { Prop, Watch } from "vue-property-decorator";
+import draggable from "vuedraggable";
+import { mapState } from "vuex";
 
-import Game from "@/game/Game.vue";
-
-import { gameStore } from "@/game/store";
-import { coreStore } from "../../../core/store";
-import { EventBus } from "../../event-bus";
+import Prompt from "@/core/components/modals/prompt.vue";
+import SelectionBox from "@/core/components/modals/SelectionBox.vue";
 import { sendLocationChange, sendNewLocation } from "@/game/api/emits/location";
+import { gameStore } from "@/game/store";
+
+import { coreStore } from "../../../core/store";
+import { Location } from "../../comm/types/settings";
+import { EventBus } from "../../event-bus";
 
 @Component({
     computed: {
         ...mapState("game", ["IS_DM"]),
         ...mapState("gameSettings", ["activeLocation"]),
     },
+    components: { Prompt, SelectionBox },
 })
 export default class LocationBar extends Vue {
+    activeLocation!: number;
+    IS_DM!: boolean;
+
+    $refs!: {
+        // archived: ArchivedLocations;
+        locations: InstanceType<typeof draggable>;
+        prompt: Prompt;
+        selectionbox: SelectionBox;
+    };
+
     @Prop() active!: boolean;
     @Prop() menuActive!: boolean;
 
     @Watch("active")
     toggleActive(active: boolean): void {
-        for (const expandEl of (this.$refs.locations as any).$el.querySelectorAll(".player-collapse-content")) {
+        for (const expandEl of this.$refs.locations.$el.querySelectorAll(".player-collapse-content")) {
             const hEl = expandEl as HTMLElement;
             if (this.expanded.includes(Number.parseInt(hEl.dataset.loc || "-1"))) {
                 if (active) {
-                    expandEl.style.removeProperty("display");
+                    hEl.style.removeProperty("display");
                 } else {
-                    expandEl.style.display = "none";
+                    hEl.style.display = "none";
                 }
             }
         }
@@ -44,12 +57,12 @@ export default class LocationBar extends Vue {
         coreStore.setLoading(true);
     }
 
-    get locations(): { id: number; name: string }[] {
-        return gameStore.locations;
+    get locations(): Location[] {
+        return [...gameStore.activeLocations];
     }
 
-    set locations(locations: { id: number; name: string }[]) {
-        gameStore.setLocations({ locations, sync: true });
+    set locations(locations: Location[]) {
+        gameStore.setActiveLocations({ locations, sync: true });
     }
 
     get playerLocations(): Map<number, string[]> {
@@ -63,14 +76,14 @@ export default class LocationBar extends Vue {
     }
 
     async createLocation(): Promise<void> {
-        const value = await (this.$parent.$parent as Game).$refs.prompt.prompt(
+        const value = await this.$refs.prompt.prompt(
             this.$t("game.ui.menu.locations.new_location_name").toString(),
             this.$t("game.ui.menu.locations.create_new_location").toString(),
         );
-        sendNewLocation(value);
+        if (value !== undefined) sendNewLocation(value);
     }
 
-    openLocationSettings(location: string): void {
+    openLocationSettings(location: number): void {
         EventBus.$emit("LocationSettings.Open", location);
     }
 
@@ -96,7 +109,7 @@ export default class LocationBar extends Vue {
                 players.push(player.name);
             }
         }
-        const idx = this.expanded.findIndex(x => x === fromLocation);
+        const idx = this.expanded.findIndex((x) => x === fromLocation);
         if (idx >= 0) {
             this.expanded.slice(idx, 1);
             this.expanded.push(toLocation);
@@ -124,7 +137,7 @@ export default class LocationBar extends Vue {
     }
 
     doHorizontalScroll(e: WheelEvent): void {
-        const el: HTMLElement = (this.$refs.locations as any).$el;
+        const el: HTMLElement = this.$refs.locations.$el as HTMLElement;
         if (e.deltaY > 0) el.scrollLeft += 100;
         else el.scrollLeft -= 100;
         this.horizontalOffset = el.scrollLeft;
@@ -132,7 +145,7 @@ export default class LocationBar extends Vue {
     }
 
     doHorizontalScrollA(_e: WheelEvent): void {
-        const el: HTMLElement = (this.$refs.locations as any).$el;
+        const el: HTMLElement = this.$refs.locations.$el as HTMLElement;
         this.fixDisplays(el);
     }
 
@@ -150,12 +163,48 @@ export default class LocationBar extends Vue {
             }
         }
     }
+
+    getLocationPlayers(location: number): string[] {
+        return this.playerLocations.get(location) ?? [];
+    }
+
+    hasArchivedLocations(): boolean {
+        return gameStore.archivedLocations.length > 0;
+    }
+
+    async showArchivedLocations(): Promise<void> {
+        const locations = gameStore.archivedLocations;
+        if (locations.length === 0) return;
+        const choice = await this.$refs.selectionbox.open(
+            "Select a location to restore",
+            locations.map((l) => l.name),
+        );
+        const location = locations.find((l) => l.name === choice);
+        if (choice !== undefined && location !== undefined) {
+            gameStore.unarchiveLocation({ id: location.id, sync: true });
+        }
+    }
 }
 </script>
 
 <template>
     <div id="location-bar" v-if="IS_DM">
-        <div id="create-location" :title="$t('game.ui.menu.locations.add_new_location')" @click="createLocation">+</div>
+        <!-- <ArchivedLocations ref="archived" /> -->
+        <SelectionBox ref="selectionbox" />
+        <Prompt ref="prompt" />
+        <div id="location-actions">
+            <div id="create-location" :title="$t('game.ui.menu.locations.add_new_location')" @click="createLocation">
+                +
+            </div>
+            <div
+                id="archive-locations"
+                title="Show archived locations"
+                @click="showArchivedLocations"
+                :class="{ noArchived: !hasArchivedLocations() }"
+            >
+                <font-awesome-icon icon="archive" />
+            </div>
+        </div>
         <draggable
             id="locations"
             v-model="locations"
@@ -206,7 +255,7 @@ export default class LocationBar extends Vue {
                     >
                         <div
                             class="player-collapse-item"
-                            v-for="player in playerLocations.get(location.id)"
+                            v-for="player in getLocationPlayers(location.id)"
                             :key="player"
                             :data-loc="location.id"
                         >
@@ -232,16 +281,54 @@ export default class LocationBar extends Vue {
     </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 #location-bar {
     --primary: #7c253e;
-    --secondary: #9c455e;
+    --secondary: 156, 69, 94;
     --primaryBG: #7c253e50;
     display: flex;
     grid-area: locations;
-    border-bottom: solid 1px var(--secondary);
+    border-bottom: solid 1px rgb(var(--secondary));
     background-color: var(--primaryBG);
     pointer-events: auto;
+}
+
+#location-actions {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+
+    #create-location,
+    #archive-locations {
+        box-sizing: border-box;
+        display: inline-grid;
+        width: 85px;
+        color: white;
+        border: solid 2px transparent;
+        background-color: rgb(var(--secondary));
+        font-size: 30px;
+        place-items: center center;
+        margin: 10px;
+        padding: 10px 0;
+
+        &:hover {
+            font-weight: bold;
+            cursor: pointer;
+            text-shadow: 0 0 20px rgba(0, 0, 0, 1);
+            border-color: white;
+        }
+
+        &.noArchived {
+            background-color: rgba(var(--secondary), 0.4);
+
+            &:hover,
+            &:hover * {
+                cursor: not-allowed;
+                border-color: transparent;
+            }
+        }
+    }
 }
 
 #locations {
@@ -253,37 +340,21 @@ export default class LocationBar extends Vue {
     max-width: calc(100vw - 105px); /* 105 = width of the #create-location div */
 
     scrollbar-width: thin;
-    scrollbar-color: var(--secondary) var(--primary);
-}
+    scrollbar-color: rgb(var(--secondary)) var(--primary);
 
-#locations::-webkit-scrollbar {
-    height: 11px;
-}
-#locations::-webkit-scrollbar-track {
-    background: var(--secondary);
-    border-radius: 6px;
-}
-#locations::-webkit-scrollbar-thumb {
-    background-color: var(--primary);
-    border-radius: 6px;
-}
+    &::-webkit-scrollbar {
+        height: 11px;
+    }
 
-#create-location {
-    overflow: hidden;
-    flex-shrink: 0;
-    display: inline-grid;
-    width: 85px;
-    color: white;
-    background-color: var(--secondary);
-    font-size: 30px;
-    place-items: center center;
-    margin: 10px;
-}
+    &::-webkit-scrollbar-track {
+        background: rgb(var(--secondary));
+        border-radius: 6px;
+    }
 
-#create-location:hover {
-    font-weight: bold;
-    cursor: pointer;
-    text-shadow: 0 0 20px rgba(0, 0, 0, 1);
+    &::-webkit-scrollbar-thumb {
+        background-color: var(--primary);
+        border-radius: 6px;
+    }
 }
 
 .location {
@@ -308,36 +379,36 @@ export default class LocationBar extends Vue {
 
 .location-settings-icon {
     padding-left: 10px;
-}
 
-.location-settings-icon svg {
-    transition: transform 0.8s ease-in-out;
-}
+    svg {
+        transition: transform 0.8s ease-in-out;
+    }
 
-.location-settings-icon:hover svg {
-    transform: rotate(180deg);
-    transform-origin: center center;
+    &:hover svg {
+        transform: rotate(180deg);
+        transform-origin: center center;
+    }
 }
 
 .drag-handle {
     width: 25px;
     height: 20px;
-}
 
-.drag-handle::before {
-    position: absolute;
-    top: 8px;
-    content: ".";
-    color: white;
-    font-size: 20px;
-    line-height: 20px;
-    text-shadow: 0 5px white, 0 10px white, 5px 0 white, 5px 5px white, 5px 10px white, 10px 0 white, 10px 5px white,
-        10px 10px white;
-}
+    &::before {
+        position: absolute;
+        top: 8px;
+        content: ".";
+        color: white;
+        font-size: 20px;
+        line-height: 20px;
+        text-shadow: 0 5px white, 0 10px white, 5px 0 white, 5px 5px white, 5px 10px white, 10px 0 white, 10px 5px white,
+            10px 10px white;
+    }
 
-.drag-handle:hover,
-.drag-handle *:hover {
-    cursor: grab;
+    &:hover,
+    *:hover {
+        cursor: grab;
+    }
 }
 
 .location-players {
@@ -358,7 +429,7 @@ export default class LocationBar extends Vue {
     padding: 0.5em 1em;
     border-bottom-left-radius: 5px;
     border-bottom-right-radius: 5px;
-    background-color: var(--secondary);
+    background-color: rgb(var(--secondary));
 }
 
 .player-collapse-content {
@@ -371,7 +442,7 @@ export default class LocationBar extends Vue {
     margin-top: 10px;
     padding: 0.5em 1em;
     border-radius: 5px;
-    background-color: var(--secondary);
+    background-color: rgb(var(--secondary));
 }
 
 .active-location {

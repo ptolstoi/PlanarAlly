@@ -4,19 +4,21 @@ export interface Tracker {
     name: string;
     value: number;
     maxvalue: number;
-    temporary: boolean; // this is for trackers unknown to the server
 }
 
 export interface Aura {
     uuid: string;
+    active: boolean;
     visionSource: boolean;
     visible: boolean;
     name: string;
     value: number;
     dim: number;
     colour: string;
+    borderColour: string;
+    angle: number;
+    direction: number;
     lastPath?: Path2D;
-    temporary: boolean; // this is for auras unknown to the server
 }
 
 export interface Label {

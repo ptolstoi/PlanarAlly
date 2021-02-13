@@ -5,23 +5,24 @@ import { layerManager } from "@/game/layers/manager";
 import { createShapeFromDict } from "@/game/shapes/utils";
 import { gameStore } from "@/game/store";
 import { g2l } from "@/game/units";
+
 import { sendClientLocationOptions } from "./api/emits/client";
 import { getFloorId } from "./layers/store";
 import { Shape } from "./shapes/shape";
 
-export class GameManager {
-    addShape(shape: ServerShape): Shape | undefined {
+class GameManager {
+    async addShape(shape: ServerShape, sync: SyncMode): Promise<Shape | undefined> {
         if (!layerManager.hasLayer(layerManager.getFloor(getFloorId(shape.floor))!, shape.layer)) {
             console.log(`Shape with unknown layer ${shape.layer} could not be added`);
             return;
         }
         const layer = layerManager.getLayer(layerManager.getFloor(getFloorId(shape.floor))!, shape.layer)!;
-        const sh = createShapeFromDict(shape);
+        const sh = await createShapeFromDict(shape);
         if (sh === undefined) {
             console.log(`Shape with unknown type ${shape.type_} could not be added`);
             return;
         }
-        layer.addShape(sh, SyncMode.NO_SYNC, InvalidationMode.NORMAL);
+        layer.addShape(sh, sync, InvalidationMode.NORMAL);
         layer.invalidate(false);
         return sh;
     }

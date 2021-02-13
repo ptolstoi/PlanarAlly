@@ -1,4 +1,5 @@
 import json
+import math
 from peewee import BooleanField, FloatField, ForeignKeyField, IntegerField, TextField
 from playhouse.shortcuts import model_to_dict, update_model_from_dict
 from typing import Any, Dict, List, Tuple
@@ -7,9 +8,9 @@ from utils import logger
 from ..asset import Asset
 from ..base import BaseModel
 from ..campaign import Layer
+from ..groups import Group
 from ..label import Label
 from ..user import User
-from ..utils import get_table
 
 
 __all__ = [
@@ -55,6 +56,8 @@ class Shape(BaseModel):
     angle = FloatField(default=0)
     stroke_width = IntegerField(default=2)
     asset = ForeignKeyField(Asset, backref="shapes", null=True, default=None)
+    group = ForeignKeyField(Group, backref="members", null=True, default=None)
+    annotation_visible = BooleanField(default=False)
 
     def __repr__(self):
         return f"<Shape {self.get_path()}>"
@@ -90,7 +93,8 @@ class Shape(BaseModel):
         aura_query = self.auras
         label_query = self.labels.join(Label)
         if not owned:
-            data["annotation"] = ""
+            if not self.annotation_visible:
+                data["annotation"] = ""
             tracker_query = tracker_query.where(Tracker.visible)
             aura_query = aura_query.where(Aura.visible)
             label_query = label_query.where(Label.visible)
@@ -145,6 +149,10 @@ class Aura(BaseModel):
     value = IntegerField()
     dim = IntegerField()
     colour = TextField()
+    active = BooleanField()
+    border_colour = TextField()
+    angle = IntegerField()
+    direction = IntegerField()
 
     def __repr__(self):
         return f"<Aura {self.name} {self.shape.get_path()}>"
@@ -174,12 +182,18 @@ class ShapeOwner(BaseModel):
 
 
 class ShapeType(BaseModel):
-    abstract = False
     shape = ForeignKeyField(Shape, primary_key=True, on_delete="CASCADE")
 
     @staticmethod
     def pre_create(**kwargs):
         return kwargs
+
+    @staticmethod
+    def post_create(subshape, **kwargs):
+        """
+        Used for special shapes that need extra behaviour after being created.
+        """
+        pass
 
     def as_dict(self, *args, **kwargs):
         return model_to_dict(self, *args, **kwargs)
@@ -195,7 +209,6 @@ class ShapeType(BaseModel):
 
 
 class BaseRect(ShapeType):
-    abstract = False
     width = FloatField()
     height = FloatField()
 
@@ -204,23 +217,20 @@ class BaseRect(ShapeType):
 
 
 class AssetRect(BaseRect):
-    abstract = False
     src = TextField()
 
 
 class Circle(ShapeType):
-    abstract = False
     radius = FloatField()
+    viewing_angle = FloatField(null=True)
 
 
 class CircularToken(Circle):
-    abstract = False
     text = TextField()
     font = TextField()
 
 
 class Line(ShapeType):
-    abstract = False
     x2 = FloatField()
     y2 = FloatField()
     line_width = IntegerField()
@@ -230,7 +240,6 @@ class Line(ShapeType):
 
 
 class Polygon(ShapeType):
-    abstract = False
     vertices = TextField()
     line_width = IntegerField()
     open_polygon = BooleanField()
@@ -255,10 +264,38 @@ class Polygon(ShapeType):
 
 
 class Rect(BaseRect):
-    abstract = False
+    pass
 
 
 class Text(ShapeType):
-    abstract = False
     text = TextField()
     font = TextField()
+
+
+class ToggleComposite(ShapeType):
+    """
+    Toggle shapes are composites that have multiple variants but only show one at a time.
+    """
+
+    active_variant = TextField(null=True)
+
+    @staticmethod
+    def post_create(subshape, **kwargs):
+        for variant in kwargs.get("variants", []):
+            CompositeShapeAssociation.create(
+                parent=subshape, variant=variant["uuid"], name=variant["name"]
+            )
+
+    def as_dict(self, *args, **kwargs):
+        model = model_to_dict(self, *args, **kwargs)
+        model["variants"] = [
+            {"uuid": sv.variant.uuid, "name": sv.name}
+            for sv in self.shape.shape_variants
+        ]
+        return model
+
+
+class CompositeShapeAssociation(BaseModel):
+    variant = ForeignKeyField(Shape, backref="composite_parent", on_delete="CASCADE")
+    parent = ForeignKeyField(Shape, backref="shape_variants", on_delete="CASCADE")
+    name = TextField()

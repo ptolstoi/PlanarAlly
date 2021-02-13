@@ -42,6 +42,18 @@ class TrackerDelta(TrackerData, total=False):
     maxvalue: int
 
 
+class TrackerMove(TypedDict):
+    shape: str
+    tracker: str
+    new_shape: str
+
+
+class AuraMove(TypedDict):
+    shape: str
+    aura: str
+    new_shape: str
+
+
 class AuraData(TypedDict):
     uuid: str
     shape: str
@@ -173,9 +185,51 @@ async def set_annotation(sid: str, data: ShapeSetStringValue):
     shape.annotation = data["value"]
     shape.save()
 
-    for sid in get_owner_sids(pr, shape, skip_sid=sid):
+    if shape.annotation_visible:
         await sio.emit(
-            "Shape.Options.Annotation.Set", data, room=sid, namespace=GAME_NS,
+            "Shape.Options.Annotation.Set",
+            data,
+            skip_sid=sid,
+            room=pr.active_location.get_path(),
+            namespace=GAME_NS,
+        )
+    else:
+        for sid in get_owner_sids(pr, shape, skip_sid=sid):
+            await sio.emit(
+                "Shape.Options.Annotation.Set", data, room=sid, namespace=GAME_NS,
+            )
+
+
+@sio.on("Shape.Options.AnnotationVisible.Set", namespace=GAME_NS)
+@auth.login_required(app, sio)
+async def set_annotation_visible(sid: str, data: ShapeSetBooleanValue):
+    pr: PlayerRoom = game_state.get(sid)
+
+    shape = get_shape_or_none(pr, data["shape"], "AnnotationVisible.Set")
+    if shape is None:
+        return
+
+    shape.annotation_visible = data["value"]
+    shape.save()
+
+    owners = [*get_owner_sids(pr, shape, skip_sid=sid)]
+
+    await sio.emit(
+        "Shape.Options.AnnotationVisible.Set",
+        data,
+        room=pr.active_location.get_path(),
+        skip_sid=sid,
+        namespace=GAME_NS,
+    )
+
+    for psid in game_state.get_sids(active_location=pr.active_location, skip_sid=sid):
+        if psid in owners:
+            continue
+        await sio.emit(
+            "Shape.Options.Annotation.Set",
+            {"shape": shape.uuid, "value": shape.annotation if data["value"] else ""},
+            room=psid,
+            namespace=GAME_NS,
         )
 
 
@@ -221,16 +275,32 @@ async def remove_aura(sid: str, data: ShapeSetStringValue):
     )
 
 
+@sio.on("Shape.Options.Label.Add", namespace=GAME_NS)
+@auth.login_required(app, sio)
+async def add_label(sid: str, data: ShapeSetStringValue):
+    pr: PlayerRoom = game_state.get(sid)
+
+    shape = get_shape_or_none(pr, data["shape"], "Label.Add")
+    if shape is None:
+        return
+
+    ShapeLabel.create(shape=shape, label=data["value"])
+
+    await sio.emit(
+        "Shape.Options.Label.Add",
+        data,
+        skip_sid=sid,
+        room=pr.active_location.get_path(),
+        namespace=GAME_NS,
+    )
+
+
 @sio.on("Shape.Options.Label.Remove", namespace=GAME_NS)
 @auth.login_required(app, sio)
 async def remove_label(sid: str, data: ShapeSetStringValue):
     pr: PlayerRoom = game_state.get(sid)
 
-    shape = get_shape_or_none(pr, data["shape"], "Label.Remove")
-    if shape is None:
-        return
-
-    label = ShapeLabel.get_by_id(data["value"])
+    label = ShapeLabel.get(shape=data["shape"], label=data["value"])
     label.delete_instance(True)
 
     await sio.emit(
@@ -281,6 +351,8 @@ async def set_name_visible(sid: str, data: ShapeSetBooleanValue):
     shape.name_visible = data["value"]
     shape.save()
 
+    owners = [*get_owner_sids(pr, shape, skip_sid=sid)]
+
     await sio.emit(
         "Shape.Options.NameVisible.Set",
         data,
@@ -288,6 +360,16 @@ async def set_name_visible(sid: str, data: ShapeSetBooleanValue):
         room=pr.active_location.get_path(),
         namespace=GAME_NS,
     )
+
+    for psid in game_state.get_sids(active_location=pr.active_location, skip_sid=sid):
+        if psid in owners:
+            continue
+        await sio.emit(
+            "Shape.Options.Name.Set",
+            {"shape": shape.uuid, "value": shape.name if data["value"] else "?"},
+            room=psid,
+            namespace=GAME_NS,
+        )
 
 
 @sio.on("Shape.Options.ShowBadge.Set", namespace=GAME_NS)
@@ -425,6 +507,28 @@ async def update_tracker(sid: str, data: TrackerDelta):
             )
 
 
+@sio.on("Shape.Options.Tracker.Move", namespace=GAME_NS)
+@auth.login_required(app, sio)
+async def move_tracker(sid: str, data: TrackerMove):
+    pr: PlayerRoom = game_state.get(sid)
+
+    new_shape = get_shape_or_none(pr, data["new_shape"], "Tracker.Options.Tracker.Move")
+    if new_shape is None:
+        return
+
+    tracker = Tracker.get_by_id(data["tracker"])
+    tracker.shape = new_shape
+    tracker.save()
+
+    await sio.emit(
+        "Shape.Options.Tracker.Move",
+        data,
+        skip_sid=sid,
+        room=pr.active_location.get_path(),
+        namespace=GAME_NS,
+    )
+
+
 @sio.on("Shape.Options.Aura.Create", namespace=GAME_NS)
 @auth.login_required(app, sio)
 async def create_aura(sid: str, data: AuraDelta):
@@ -495,3 +599,25 @@ async def update_aura(sid: str, data: AuraDelta):
             await sio.emit(
                 "Shape.Options.Aura.Update", data, room=psid, namespace=GAME_NS,
             )
+
+
+@sio.on("Shape.Options.Aura.Move", namespace=GAME_NS)
+@auth.login_required(app, sio)
+async def move_aura(sid: str, data: AuraMove):
+    pr: PlayerRoom = game_state.get(sid)
+
+    new_shape = get_shape_or_none(pr, data["new_shape"], "Aura.Options.Tracker.Move")
+    if new_shape is None:
+        return
+
+    aura = Aura.get_by_id(data["aura"])
+    aura.shape = new_shape
+    aura.save()
+
+    await sio.emit(
+        "Shape.Options.Aura.Move",
+        data,
+        skip_sid=sid,
+        room=pr.active_location.get_path(),
+        namespace=GAME_NS,
+    )

@@ -3,6 +3,7 @@ import { getModule, Module, Mutation, VuexModule } from "vuex-module-decorators"
 
 import { Asset } from "@/core/comm/types";
 import { rootStore } from "@/store";
+
 import { router } from "../router";
 
 export interface AssetState {
@@ -34,8 +35,12 @@ class AssetStore extends VuexModule {
 
     @Mutation
     clearSelected(): void {
-        console.log("Cleared");
         this._selected = [];
+    }
+
+    @Mutation
+    clearFolderPath(): void {
+        this.folderPath = [];
     }
 
     @Mutation
@@ -51,17 +56,14 @@ class AssetStore extends VuexModule {
     @Mutation
     setPath(path: number[]): void {
         this.folderPath = path;
-        for (const [index, part] of router.currentRoute.path
-            .slice("/assets/".length)
-            .split("/")
-            .entries()) {
+        for (const [index, part] of router.currentRoute.path.slice("/assets/".length).split("/").entries()) {
             this._idMap.set(path[index], { id: path[index], name: part });
         }
     }
 
     @Mutation
     resolveUpload(file: string): void {
-        const idx = this._pendingUploads.findIndex(f => f === file);
+        const idx = this._pendingUploads.findIndex((f) => f === file);
         if (idx >= 0) {
             this._pendingUploads.splice(idx, 1);
             this._resolvedUploads++;
@@ -72,6 +74,35 @@ class AssetStore extends VuexModule {
         }
     }
 
+    @Mutation
+    addAsset(asset: Asset): void {
+        this._idMap.set(asset.id, asset);
+        let target = this._folders;
+        if (asset.file_hash) {
+            target = this._files;
+        }
+        target.push(asset.id);
+
+        const sorted_target = target
+            .map((i) => this._idMap.get(i))
+            .filter((a) => a !== undefined)
+            .sort((a, b) => a!.name.localeCompare(b!.name))
+            .map((a) => a!.id);
+        if (asset.file_hash) {
+            this._files = sorted_target;
+        } else {
+            this._folders = sorted_target;
+        }
+    }
+
+    @Mutation
+    removeAsset(asset: number): void {
+        let target = this._folders;
+        if (this._files.includes(asset)) target = this._files;
+        target.splice(target.indexOf(asset), 1);
+        this._idMap.delete(asset);
+    }
+
     get path(): number[] {
         return this.folderPath;
     }
@@ -80,11 +111,11 @@ class AssetStore extends VuexModule {
         return this._expectedUploads;
     }
 
-    get files(): number[] {
+    get files(): readonly number[] {
         return this._files;
     }
 
-    get folders(): number[] {
+    get folders(): readonly number[] {
         return this._folders;
     }
 

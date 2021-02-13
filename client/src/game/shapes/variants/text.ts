@@ -1,6 +1,7 @@
 import { GlobalPoint } from "@/game/geom";
 import { Shape } from "@/game/shapes/shape";
 import { BoundingRect } from "@/game/shapes/variants/boundingrect";
+
 import { ServerText } from "../../comm/types/shapes";
 import { rotateAroundPoint } from "../../utils";
 import { SHAPE_TYPE } from "../types";
@@ -68,8 +69,8 @@ export class Text extends Shape {
         this.refPoint = centerPoint;
     }
 
-    visibleInCanvas(canvas: HTMLCanvasElement): boolean {
-        if (super.visibleInCanvas(canvas)) return true;
+    visibleInCanvas(canvas: HTMLCanvasElement, options: { includeAuras: boolean }): boolean {
+        if (super.visibleInCanvas(canvas, options)) return true;
         return this.getBoundingBox().visibleInCanvas(canvas);
     }
     // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -89,7 +90,7 @@ export class Text extends Shape {
 
     getMaxWidth(ctx: CanvasRenderingContext2D): number {
         const lines = this.getLines(ctx);
-        const widths = lines.map(line => ctx.measureText(line.text).width);
+        const widths = lines.map((line) => ctx.measureText(line.text).width);
         return Math.max(...widths);
     }
 

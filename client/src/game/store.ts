@@ -1,3 +1,6 @@
+import Vue from "vue";
+import { getModule, Module, Mutation, VuexModule } from "vuex-module-decorators";
+
 import { AssetList } from "@/core/comm/types";
 import { socket } from "@/game/api/socket";
 import { Note } from "@/game/comm/types/general";
@@ -5,23 +8,24 @@ import { ServerShape } from "@/game/comm/types/shapes";
 import { GlobalPoint, Vector } from "@/game/geom";
 import { layerManager } from "@/game/layers/manager";
 import { g2l, l2g } from "@/game/units";
-import { zoomValue } from "@/game/utils";
 import { rootStore } from "@/store";
-import Vue from "vue";
-import { getModule, Module, Mutation, VuexModule } from "vuex-module-decorators";
+
 import { sendClientLocationOptions, sendClientOptions } from "./api/emits/client";
-import { sendLocationOrder, sendLocationRemove } from "./api/emits/location";
+import {
+    sendLocationArchive,
+    sendLocationOrder,
+    sendLocationRemove,
+    sendLocationRename,
+    sendLocationUnarchive,
+} from "./api/emits/location";
 import { sendRoomKickPlayer, sendRoomLock } from "./api/emits/room";
+import { Location } from "./comm/types/settings";
 import { floorStore } from "./layers/store";
+import { gameManager } from "./manager";
+import { gameSettingsStore } from "./settings";
 import { Label } from "./shapes/interfaces";
 
 export const DEFAULT_GRID_SIZE = 50;
-
-export interface LocationUserOptions {
-    panX: number;
-    panY: number;
-    zoomFactor: number;
-}
 
 export interface Player {
     id: number;
@@ -30,7 +34,7 @@ export interface Player {
     role: number;
 }
 
-export interface ClientOptions {
+interface ClientOptions {
     gridColour: string;
     fowColour: string;
     rulerColour: string;
@@ -46,7 +50,7 @@ export interface GameState extends ClientOptions {
 class GameStore extends VuexModule implements GameState {
     boardInitialized = false;
 
-    locations: { id: number; name: string }[] = [];
+    private locations: Location[] = [];
 
     assets: AssetList = {};
 
@@ -68,14 +72,22 @@ class GameStore extends VuexModule implements GameState {
     rulerColour = "rgba(255, 0, 0, 1)";
     panX = 0;
     panY = 0;
+
+    /**
+     *  The desired size of a grid cell in pixels
+     
+     *  !! This variable must only be used for UI purposes !!
+     *  For core distance logic use DEFAULT_GRID_SIZE
+     *  The zoom code will take care of proper conversions.
+     */
     gridSize = DEFAULT_GRID_SIZE;
 
     zoomDisplay = 0.5;
     // zoomFactor = 1;
 
     annotations: string[] = [];
-    ownedtokens: string[] = [];
-    _activeTokens: string[] = [];
+    private _ownedtokens: string[] = [];
+    private _activeTokens: string[] | undefined = undefined;
 
     drawTEContour = false;
 
@@ -94,12 +106,19 @@ class GameStore extends VuexModule implements GameState {
 
     get zoomFactor(): number {
         const gf = gameStore.gridSize / DEFAULT_GRID_SIZE;
-        return zoomValue(this.zoomDisplay) * gf;
+        // Powercurve 0.2/3/10
+        // Based on https://stackoverflow.com/a/17102320
+        const zoomValue = 1 / (-5 / 3 + (28 / 15) * Math.exp(1.83 * this.zoomDisplay));
+        return zoomValue * gf;
     }
 
-    get activeTokens(): string[] {
-        if (this._activeTokens.length === 0) return this.ownedtokens;
+    get activeTokens(): readonly string[] {
+        if (this._activeTokens === undefined) return this.ownedtokens;
         return this._activeTokens;
+    }
+
+    get ownedtokens(): readonly string[] {
+        return this._ownedtokens;
     }
 
     get screenTopLeft(): GlobalPoint {
@@ -115,6 +134,14 @@ class GameStore extends VuexModule implements GameState {
         return this.boardInitialized;
     }
 
+    get activeLocations(): readonly Location[] {
+        return this.locations.filter((l) => !l.archived);
+    }
+
+    get archivedLocations(): readonly Location[] {
+        return this.locations.filter((l) => l.archived);
+    }
+
     @Mutation
     setFakePlayer(value: boolean): void {
         this.FAKE_PLAYER = value;
@@ -127,6 +154,7 @@ class GameStore extends VuexModule implements GameState {
         if (zoom === this.zoomDisplay) return;
         if (zoom < 0) zoom = 0;
         if (zoom > 1) zoom = 1;
+        // const gf = this.gridSize / DEFAULT_GRID_SIZE;
         this.zoomDisplay = zoom;
         layerManager.invalidateAllFloors();
     }
@@ -204,7 +232,7 @@ class GameStore extends VuexModule implements GameState {
 
     @Mutation
     newMarker(data: { marker: string; sync: boolean }): void {
-        const exists = this.markers.some(m => m === data.marker);
+        const exists = this.markers.some((m) => m === data.marker);
         if (!exists) {
             this.markers.push(data.marker);
             if (data.sync) socket.emit("Marker.New", data.marker);
@@ -213,18 +241,17 @@ class GameStore extends VuexModule implements GameState {
 
     @Mutation
     removeMarker(data: { marker: string; sync: boolean }): void {
-        this.markers = this.markers.filter(m => m !== data.marker);
-        if (data.sync) socket.emit("Marker.Remove", data.marker);
+        if (this.markers.some((m) => m === data.marker)) {
+            this.markers = this.markers.filter((m) => m !== data.marker);
+            if (data.sync) socket.emit("Marker.Remove", data.marker);
+        }
     }
 
     @Mutation
     jumpToMarker(marker: string): void {
         const shape = layerManager.UUIDMap.get(marker);
         if (shape == undefined) return;
-        const nh = window.innerWidth / this.gridSize / zoomValue(this.zoomDisplay) / 2;
-        const nv = window.innerHeight / this.gridSize / zoomValue(this.zoomDisplay) / 2;
-        this.panX = -shape.refPoint.x + nh * this.gridSize;
-        this.panY = -shape.refPoint.y + nv * this.gridSize;
+        gameManager.setCenterPosition(shape.center());
         sendClientLocationOptions();
         layerManager.invalidateAllFloors();
     }
@@ -235,16 +262,54 @@ class GameStore extends VuexModule implements GameState {
     }
 
     @Mutation
-    setLocations(data: { locations: { id: number; name: string }[]; sync: boolean }): void {
-        this.locations = data.locations;
-        if (data.sync) sendLocationOrder(this.locations.map(l => l.id));
+    setActiveLocations(data: { locations: { id: number; name: string; archived: boolean }[]; sync: boolean }): void {
+        const archivedLocations = this.locations.filter((l) => l.archived);
+        this.locations = data.locations.concat(archivedLocations);
+        if (data.sync) sendLocationOrder(this.locations.map((l) => l.id));
     }
 
     @Mutation
-    removeLocation(id: number): void {
-        const idx = this.locations.findIndex(l => l.id === id);
+    setLocations(data: { locations: { id: number; name: string; archived: boolean }[]; sync: boolean }): void {
+        this.locations = data.locations;
+        if (data.sync) sendLocationOrder(this.locations.map((l) => l.id));
+    }
+
+    @Mutation
+    removeLocation(data: { id: number; sync: boolean }): void {
+        const idx = this.locations.findIndex((l) => l.id === data.id);
         if (idx >= 0) this.locations.splice(idx, 1);
-        sendLocationRemove(id);
+        if (data.sync) sendLocationRemove(data.id);
+    }
+
+    @Mutation
+    renameLocation(data: { location: number; name: string; sync: boolean }): void {
+        const location = this.locations.find((l) => l.id === data.location);
+        if (location === undefined) {
+            throw new Error("unknown location rename attempt");
+        }
+        if (gameSettingsStore.activeLocation === data.location) gameSettingsStore.setActiveLocation(data.location);
+        location.name = data.name;
+        if (data.sync) sendLocationRename({ location: data.location, name: data.name });
+    }
+
+    @Mutation
+    archiveLocation(data: { id: number; sync: boolean }): void {
+        const location = this.locations.find((l) => l.id === data.id);
+        if (location === undefined) {
+            throw new Error("unknown location rename attempt");
+        }
+        location.archived = true;
+        if (data.sync) sendLocationArchive(data.id);
+    }
+
+    @Mutation
+    unarchiveLocation(data: { id: number; sync: boolean }): void {
+        const location = this.locations.find((l) => l.id === data.id);
+        if (location === undefined) {
+            throw new Error("unknown location rename attempt");
+        }
+        location.archived = false;
+        if (data.sync) sendLocationUnarchive(data.id);
     }
 
     @Mutation
@@ -314,7 +379,7 @@ class GameStore extends VuexModule implements GameState {
 
     @Mutation
     updateNote(data: { note: Note; sync: boolean }): void {
-        const actualNote = this.notes.find(n => n.uuid === data.note.uuid);
+        const actualNote = this.notes.find((n) => n.uuid === data.note.uuid);
         if (actualNote === undefined) return;
         actualNote.title = data.note.title;
         actualNote.text = data.note.text;
@@ -323,7 +388,7 @@ class GameStore extends VuexModule implements GameState {
 
     @Mutation
     removeNote(data: { note: Note; sync: boolean }): void {
-        this.notes = this.notes.filter(n => n.uuid !== data.note.uuid);
+        this.notes = this.notes.filter((n) => n.uuid !== data.note.uuid);
         if (data.sync) socket.emit("Note.Remove", data.note.uuid);
     }
 
@@ -343,24 +408,37 @@ class GameStore extends VuexModule implements GameState {
     }
 
     @Mutation
-    setActiveTokens(tokens: string[]): void {
+    setActiveTokens(tokens: string[] | undefined): void {
         this._activeTokens = tokens;
         layerManager.invalidateLightAllFloors();
     }
 
     @Mutation
     addActiveToken(token: string): void {
+        if (this._activeTokens === undefined) return;
         this._activeTokens.push(token);
+        if (this._activeTokens.length === this._ownedtokens.length) this._activeTokens = undefined;
         layerManager.invalidateLightAllFloors();
     }
 
     @Mutation
     removeActiveToken(token: string): void {
-        if (this._activeTokens.length === 0) {
-            this._activeTokens = [...this.ownedtokens];
+        if (this._activeTokens === undefined) {
+            this._activeTokens = [...this._ownedtokens];
         }
         this._activeTokens.splice(this._activeTokens.indexOf(token), 1);
         layerManager.invalidateLightAllFloors();
+    }
+
+    @Mutation
+    addOwnedToken(token: string): void {
+        if (!this._ownedtokens.includes(token)) this._ownedtokens.push(token);
+    }
+
+    @Mutation
+    removeOwnedToken(token: string): void {
+        const index = this._ownedtokens.indexOf(token);
+        if (index >= 0) this._ownedtokens.splice(index, 1);
     }
 
     @Mutation
@@ -385,7 +463,7 @@ class GameStore extends VuexModule implements GameState {
     @Mutation
     kickPlayer(playerId: number): void {
         sendRoomKickPlayer(playerId);
-        this.players = this.players.filter(p => p.id !== playerId);
+        this.players = this.players.filter((p) => p.id !== playerId);
     }
 
     @Mutation
@@ -404,7 +482,7 @@ class GameStore extends VuexModule implements GameState {
 
     @Mutation
     clear(): void {
-        this.ownedtokens = [];
+        this._ownedtokens = [];
         this.annotations = [];
         this.notes = [];
         this.markers = [];

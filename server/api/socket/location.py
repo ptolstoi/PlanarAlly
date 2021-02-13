@@ -51,9 +51,15 @@ class LocationOptionsData(TypedDict):
     location: Union[int, None]
 
 
+class PositionTuple(TypedDict):
+    x: int
+    y: int
+
+
 class LocationChangeData(TypedDict):
     location: int
     users: List[str]
+    position: PositionTuple
 
 
 class LocationRenameData(TypedDict):
@@ -141,7 +147,8 @@ async def load_location(sid: str, location: Location, *, complete=False):
     # 5. Load Board
 
     locations = [
-        {"id": l.id, "name": l.name} for l in pr.room.locations.order_by(Location.index)
+        {"id": l.id, "name": l.name, "archived": l.archived}
+        for l in pr.room.locations.order_by(Location.index)
     ]
     await sio.emit("Board.Locations.Set", locations, room=sid, namespace=GAME_NS)
 
@@ -169,7 +176,10 @@ async def load_location(sid: str, location: Location, *, complete=False):
     if location_data:
         await send_client_initiatives(pr, pr.player)
         await sio.emit(
-            "Initiative.Round.Update", location_data.round, room=sid, namespace=GAME_NS,
+            "Initiative.Round.Update",
+            location_data.round,
+            room=sid,
+            namespace=GAME_NS,
         )
         await sio.emit(
             "Initiative.Turn.Set", location_data.turn, room=sid, namespace=GAME_NS
@@ -186,7 +196,10 @@ async def load_location(sid: str, location: Location, *, complete=False):
         )
 
         await sio.emit(
-            "Labels.Set", [l.as_dict() for l in labels], room=sid, namespace=GAME_NS,
+            "Labels.Set",
+            [l.as_dict() for l in labels],
+            room=sid,
+            namespace=GAME_NS,
         )
         await sio.emit(
             "Labels.Filters.Set",
@@ -259,11 +272,25 @@ async def change_location(sid: str, data: LocationChangeData):
             continue
 
         for psid in game_state.get_sids(player=room_player.player, room=pr.room):
-            sio.leave_room(
-                psid, room_player.active_location.get_path(), namespace=GAME_NS
-            )
-            sio.enter_room(psid, new_location.get_path(), namespace=GAME_NS)
+            try:
+                sio.leave_room(
+                    psid, room_player.active_location.get_path(), namespace=GAME_NS
+                )
+                sio.enter_room(psid, new_location.get_path(), namespace=GAME_NS)
+            except KeyError:
+                await game_state.remove_sid(psid)
+                continue
             await load_location(psid, new_location)
+            # We could send this to all users in the new location, BUT
+            # loading times might vary and we don't want to snap people back when they already move around
+            # And it's possible that there are already users on the new location that don't want to be moved to this new position
+            if "position" in data:
+                await sio.emit(
+                    "Position.Set",
+                    data=data["position"],
+                    room=psid,
+                    namespace=GAME_NS,
+                )
         room_player.active_location = new_location
         room_player.save()
 
@@ -396,6 +423,46 @@ async def delete_location(sid: str, location_id: int):
         return
 
     location.delete_instance(recursive=True)
+
+
+@sio.on("Location.Archive", namespace=GAME_NS)
+@auth.login_required(app, sio)
+async def archive_location(sid: str, location_id: int):
+    pr: PlayerRoom = game_state.get(sid)
+
+    if pr.role != Role.DM:
+        logger.warning(f"{pr.player.name} attempted to archive a location.")
+        return
+
+    location = Location.get_by_id(location_id)
+    location.archived = True
+    location.save()
+
+    for player_room in pr.room.players:
+        for psid in game_state.get_sids(skip_sid=sid, player=player_room.player):
+            await sio.emit(
+                "Location.Archive", location_id, room=psid, namespace=GAME_NS
+            )
+
+
+@sio.on("Location.Unarchive", namespace=GAME_NS)
+@auth.login_required(app, sio)
+async def unarchive_location(sid: str, location_id: int):
+    pr: PlayerRoom = game_state.get(sid)
+
+    if pr.role != Role.DM:
+        logger.warning(f"{pr.player.name} attempted to unarchive a location.")
+        return
+
+    location = Location.get_by_id(location_id)
+    location.archived = False
+    location.save()
+
+    for player_room in pr.room.players:
+        for psid in game_state.get_sids(skip_sid=sid, player=player_room.player):
+            await sio.emit(
+                "Location.Unarchive", location_id, room=psid, namespace=GAME_NS
+            )
 
 
 @sio.on("Location.Spawn.Info.Get", namespace=GAME_NS)

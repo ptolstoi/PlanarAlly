@@ -2,6 +2,7 @@ import { GlobalPoint } from "@/game/geom";
 import { Shape } from "@/game/shapes/shape";
 import { BoundingRect } from "@/game/shapes/variants/boundingrect";
 import { g2l, g2lx, g2ly, g2lz } from "@/game/units";
+
 import { ServerLine } from "../../comm/types/shapes";
 import { rotateAroundPoint } from "../../utils";
 import { SHAPE_TYPE } from "../types";
@@ -83,8 +84,8 @@ export class Line extends Shape {
         this.refPoint = GlobalPoint.fromArray([...centerPoint.subtract(oldCenter.subtract(this.refPoint))]);
         this.endPoint = GlobalPoint.fromArray([...centerPoint.subtract(oldCenter.subtract(this.endPoint))]);
     }
-    visibleInCanvas(canvas: HTMLCanvasElement): boolean {
-        if (super.visibleInCanvas(canvas)) return true;
+    visibleInCanvas(canvas: HTMLCanvasElement, options: { includeAuras: boolean }): boolean {
+        if (super.visibleInCanvas(canvas, options)) return true;
         return this.getBoundingBox().visibleInCanvas(canvas);
     }
     // eslint-disable-next-line @typescript-eslint/no-empty-function

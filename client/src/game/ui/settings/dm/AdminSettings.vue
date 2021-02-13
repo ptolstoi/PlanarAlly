@@ -3,7 +3,7 @@ import Vue from "vue";
 import Component from "vue-class-component";
 
 import InputCopyElement from "@/core/components/inputCopy.vue";
-import Game from "../../../Game.vue";
+import Prompt from "@/core/components/modals/prompt.vue";
 import { socket } from "@/game/api/socket";
 import { EventBus } from "@/game/event-bus";
 import { gameStore, Player } from "@/game/store";
@@ -11,9 +11,14 @@ import { gameStore, Player } from "@/game/store";
 @Component({
     components: {
         InputCopyElement,
+        Prompt,
     },
 })
 export default class AdminSettings extends Vue {
+    $refs!: {
+        prompt: Prompt;
+    };
+
     showRefreshState = false;
     refreshState = "pending";
 
@@ -35,7 +40,7 @@ export default class AdminSettings extends Vue {
     }
 
     get players(): Player[] {
-        return gameStore.players.filter(p => p.role !== 1);
+        return gameStore.players.filter((p) => p.role !== 1);
     }
 
     refreshInviteCode(): void {
@@ -50,7 +55,7 @@ export default class AdminSettings extends Vue {
         gameStore.setIsLocked({ isLocked: !gameStore.isLocked, sync: true });
     }
     async deleteSession(): Promise<void> {
-        const value = await (this.$parent.$parent.$parent.$parent.$parent as Game).$refs.prompt.prompt(
+        const value = await this.$refs.prompt.prompt(
             this.$t("game.ui.settings.dm.AdminSettings.delete_session_msg_CREATOR_ROOM", {
                 creator: gameStore.roomCreator,
                 room: gameStore.roomName,
@@ -66,6 +71,7 @@ export default class AdminSettings extends Vue {
 
 <template>
     <div class="panel">
+        <Prompt ref="prompt"></Prompt>
         <div class="spanrow header" v-t="'common.players'"></div>
         <div class="row smallrow" v-for="player in players" :key="player.id">
             <div>{{ player.name }}</div>

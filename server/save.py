@@ -1,28 +1,41 @@
+"""
+This file is responsible for migrating old save files to new versions.
+
+The `SAVE_VERSION` listed below lists the active save file format.
+
+IMPORTANT:
+When writing migrations make sure that these things are respected:
+- Prefer raw sql over orm methods as these can lead to issues when you're multiple versions behind.
+- Some column names clash with some sql keywords (e.g. 'index', 'group'), make sure that these are handled correctly
+    - i.e. surround them at all times with quotes.
+    - WHEN USING THIS IN A SELECT STATEMENT MAKE SURE YOU USE " AND NOT ' OR YOU WILL HAVE A STRING LITERAL
+- When changing models that have inherited parents or children also update those with queries
+    - e.g. a column added to Circle also needs to be added to CircularToken
+"""
+
+SAVE_VERSION = 52
+
 import json
 import logging
+import math
 import os
 import secrets
 import shutil
-import sqlite3
 import sys
 from pathlib import Path
+from uuid import uuid4
 
 from peewee import (
     BooleanField,
-    FloatField,
     ForeignKeyField,
     IntegerField,
-    OperationalError,
-    TextField,
 )
-from playhouse.migrate import SqliteMigrator, fn, migrate
+from playhouse.migrate import SqliteMigrator, migrate
 
 from config import SAVE_FILE
 from models import ALL_MODELS, Constants
 from models.db import db
 from utils import OldVersionException, UnknownVersionException
-
-SAVE_VERSION = 45
 
 logger: logging.Logger = logging.getLogger("PlanarAllyServer")
 logger.setLevel(logging.INFO)
@@ -37,37 +50,14 @@ def inc_save_version():
 
 
 def upgrade(version):
-    if version < 18:
+    if version < 20:
         raise OldVersionException(
             f"Upgrade code for this version is >1 year old and is no longer in the active codebase to reduce clutter. You can still find this code on github, contact me for more info."
         )
 
     db.foreign_keys = False
 
-    if version == 18:
-        migrator = SqliteMigrator(db)
-        with db.atomic():
-            migrate(migrator.add_column("user", "email", TextField(null=True)))
-    elif version == 19:
-
-        db.execute_sql(
-            'CREATE TABLE IF NOT EXISTS "floor" ("id" INTEGER NOT NULL PRIMARY KEY, "location_id" INTEGER NOT NULL, "name" TEXT, "index" INTEGER NOT NULL, FOREIGN KEY ("location_id") REFERENCES "location" ("id") ON DELETE CASCADE)'
-        )
-        db.execute_sql(
-            'INSERT INTO floor (location_id, name, "index") SELECT id, "ground", 0 FROM location'
-        )
-
-        with db.atomic():
-            db.execute_sql("CREATE TEMPORARY TABLE _layer_19 AS SELECT * FROM layer")
-            db.execute_sql("DROP TABLE layer")
-            db.execute_sql(
-                'CREATE TABLE IF NOT EXISTS "layer" ("id" INTEGER NOT NULL PRIMARY KEY, "floor_id" INTEGER NOT NULL, "name" TEXT NOT NULL, "type_" TEXT NOT NULL, "player_visible" INTEGER NOT NULL, "player_editable" INTEGER NOT NULL, "selectable" INTEGER NOT NULL, "index" INTEGER NOT NULL, FOREIGN KEY ("floor_id") REFERENCES "floor" ("id") ON DELETE CASCADE)'
-            )
-            db.execute_sql(
-                'INSERT INTO layer (id, floor_id, name, type_, player_visible, player_editable, selectable, "index") SELECT _layer_19.id, floor.id, _layer_19.name, type_, player_visible, player_editable, selectable, _layer_19."index" FROM _layer_19 INNER JOIN floor ON floor.location_id = _layer_19.location_id'
-            )
-
-    elif version == 20:
+    if version == 20:
         migrator = SqliteMigrator(db)
         with db.atomic():
             migrate(
@@ -453,7 +443,9 @@ def upgrade(version):
                 "UPDATE shape_owner SET movement_access = CASE WHEN edit_access = 0 THEN 0 ELSE 1 END"
             )
 
-            migrate(migrator.add_not_null("shape_owner", "movement_access"),)
+            migrate(
+                migrator.add_not_null("shape_owner", "movement_access"),
+            )
 
     elif version == 30:
         # Add spawn locations
@@ -541,7 +533,7 @@ def upgrade(version):
             )
             db.execute_sql('CREATE INDEX "shape_layer_id" ON "shape" ("layer_id")')
             db.execute_sql(
-                "INSERT INTO shape (uuid, layer_id, type_, x, y, name, name_visible, fill_colour, stroke_colour, vision_obstruction, movement_obstruction, is_token, annotation, draw_operator, 'index', options, badge, show_badge, default_edit_access, default_vision_access, is_invisible, default_movement_access, is_locked, angle, stroke_width) SELECT uuid, layer_id, type_, x, y, name, name_visible, fill_colour, stroke_colour, vision_obstruction, movement_obstruction, is_token, annotation, draw_operator, 'index', options, badge, show_badge, default_edit_access, default_vision_access, is_invisible, default_movement_access, is_locked, angle, stroke_width FROM _shape_37"
+                'INSERT INTO shape (uuid, layer_id, type_, x, y, name, name_visible, fill_colour, stroke_colour, vision_obstruction, movement_obstruction, is_token, annotation, draw_operator, "index", options, badge, show_badge, default_edit_access, default_vision_access, is_invisible, default_movement_access, is_locked, angle, stroke_width) SELECT uuid, layer_id, type_, x, y, name, name_visible, fill_colour, stroke_colour, vision_obstruction, movement_obstruction, is_token, annotation, draw_operator, "index", options, badge, show_badge, default_edit_access, default_vision_access, is_invisible, default_movement_access, is_locked, angle, stroke_width FROM _shape_37'
             )
             db.execute_sql("CREATE TEMPORARY TABLE _text_37 AS SELECT * FROM text")
             db.execute_sql("DROP TABLE text")
@@ -611,7 +603,7 @@ def upgrade(version):
             db.execute_sql('CREATE INDEX "shape_layer_id" ON "shape" ("layer_id")')
             db.execute_sql('CREATE INDEX "shape_asset_id" ON "shape" ("asset_id")')
             db.execute_sql(
-                "INSERT INTO shape (uuid, layer_id, type_, x, y, name, name_visible, fill_colour, stroke_colour, vision_obstruction, movement_obstruction, is_token, annotation, draw_operator, 'index', options, badge, show_badge, default_edit_access, default_vision_access, is_invisible, default_movement_access, is_locked, angle, stroke_width) SELECT uuid, layer_id, type_, x, y, name, name_visible, fill_colour, stroke_colour, vision_obstruction, movement_obstruction, is_token, annotation, draw_operator, 'index', options, badge, show_badge, default_edit_access, default_vision_access, is_invisible, default_movement_access, is_locked, angle, stroke_width FROM _shape_41"
+                'INSERT INTO shape (uuid, layer_id, type_, x, y, name, name_visible, fill_colour, stroke_colour, vision_obstruction, movement_obstruction, is_token, annotation, draw_operator, "index", options, badge, show_badge, default_edit_access, default_vision_access, is_invisible, default_movement_access, is_locked, angle, stroke_width) SELECT uuid, layer_id, type_, x, y, name, name_visible, fill_colour, stroke_colour, vision_obstruction, movement_obstruction, is_token, annotation, draw_operator, "index", options, badge, show_badge, default_edit_access, default_vision_access, is_invisible, default_movement_access, is_locked, angle, stroke_width FROM _shape_41'
             )
 
     elif version == 42:
@@ -655,6 +647,145 @@ def upgrade(version):
             db.execute_sql(
                 "INSERT INTO initiative_effect (uuid, initiative_id, name, turns) SELECT uuid, initiative_id, name, turns FROM _initiative_effect_44"
             )
+    elif version == 45:
+        # Promote group to a dedicated DB structure AND fix 'index' values in Shape.index
+        with db.atomic():
+            db.execute_sql('UPDATE shape set "index" = 0 WHERE "index" = ?', ("index",))
+            db.execute_sql(
+                'CREATE TABLE IF NOT EXISTS "group" ("uuid" TEXT NOT NULL PRIMARY KEY, "character_set" TEXT NOT NULL, "creation_order" TEXT DEFAULT "incrementing")'
+            )
+            db.execute_sql("CREATE TEMPORARY TABLE _shape_45 AS SELECT * FROM shape")
+            db.execute_sql("DROP TABLE shape")
+            db.execute_sql(
+                'CREATE TABLE IF NOT EXISTS "shape" ("uuid" TEXT NOT NULL PRIMARY KEY, "layer_id" INTEGER NOT NULL, "type_" TEXT NOT NULL, "x" REAL NOT NULL, "y" REAL NOT NULL, "name" TEXT, "name_visible" INTEGER NOT NULL, "fill_colour" TEXT NOT NULL, "stroke_colour" TEXT NOT NULL, "vision_obstruction" INTEGER NOT NULL, "movement_obstruction" INTEGER NOT NULL, "is_token" INTEGER NOT NULL, "annotation" TEXT NOT NULL, "draw_operator" TEXT NOT NULL, "index" INTEGER NOT NULL, "options" TEXT, "badge" INTEGER NOT NULL, "show_badge" INTEGER NOT NULL, "default_edit_access" INTEGER NOT NULL, "default_vision_access" INTEGER NOT NULL, is_invisible INTEGER NOT NULL DEFAULT 0, default_movement_access INTEGER NOT NULL DEFAULT 0, is_locked INTEGER NOT NULL DEFAULT 0, angle REAL NOT NULL DEFAULT 0, stroke_width INTEGER NOT NULL DEFAULT 2, asset_id INTEGER, group_id TEXT, FOREIGN KEY ("layer_id") REFERENCES "layer" ("id") ON DELETE CASCADE, FOREIGN KEY ("asset_id") REFERENCES "asset" ("id"), FOREIGN KEY ("group_id") REFERENCES "group" ("uuid"))'
+            )
+            db.execute_sql('CREATE INDEX "shape_layer_id" ON "shape" ("layer_id")')
+            db.execute_sql('CREATE INDEX "shape_asset_id" ON "shape" ("asset_id")')
+            db.execute_sql('CREATE INDEX "shape_group_id" ON "shape" ("group_id")')
+            db.execute_sql(
+                'INSERT INTO shape (uuid, layer_id, type_, x, y, name, name_visible, fill_colour, stroke_colour, vision_obstruction, movement_obstruction, is_token, annotation, draw_operator, "index", options, badge, show_badge, default_edit_access, default_vision_access, is_invisible, default_movement_access, is_locked, angle, stroke_width, asset_id) SELECT uuid, layer_id, type_, x, y, name, name_visible, fill_colour, stroke_colour, vision_obstruction, movement_obstruction, is_token, annotation, draw_operator, "index", options, badge, show_badge, default_edit_access, default_vision_access, is_invisible, default_movement_access, is_locked, angle, stroke_width, asset_id FROM _shape_45'
+            )
+
+            data = db.execute_sql("SELECT uuid, badge, options FROM shape")
+            pending_groups = {}
+            created_groups = {}
+            for row in data.fetchall():
+                uuid, badge, options = row
+                group_id = None
+                if options:
+                    try:
+                        options = dict(json.loads(options))
+                    except:
+                        logger.error(
+                            f"Could not read options for {uuid}, skipping this shape"
+                        )
+                        continue
+                    if "groupInfo" in options:
+                        # create new group
+                        group_id = str(uuid4())
+                        db.execute_sql(
+                            "INSERT INTO 'group' (uuid, character_set, creation_order) VALUES (?, ?, ?)",
+                            (group_id, "0,1,2,3,4,5,6,7,8,9", "incrementing"),
+                        )
+                        created_groups[uuid] = group_id
+                        # process everything in pending_groups
+                        if uuid in pending_groups:
+                            for member in pending_groups[uuid]:
+                                db.execute_sql(
+                                    "UPDATE shape SET group_id = ? WHERE uuid = ?",
+                                    (group_id, member),
+                                )
+                            del pending_groups[uuid]
+                        del options["groupInfo"]
+                    if "groupId" in options:
+                        if options["groupId"] in created_groups:
+                            # add to existing group
+                            group_id = created_groups[options["groupId"]]
+                        else:
+                            # remember this shape as something to add later
+                            if options["groupId"] not in pending_groups:
+                                pending_groups[options["groupId"]] = []
+                            pending_groups[options["groupId"]].append(uuid)
+                        del options["groupId"]
+                    options = json.dumps([[k, v] for k, v in options.items()])
+                if badge:
+                    badge -= 1
+                db.execute_sql(
+                    "UPDATE shape SET options = ?, badge = ?, group_id = ? WHERE uuid = ?",
+                    (options, badge, group_id, uuid),
+                )
+    elif version == 46:
+        # Add Composite Shape Association and Toggle Shape tables
+        with db.atomic():
+            db.execute_sql(
+                'CREATE TABLE IF NOT EXISTS "composite_shape_association" ("id" INTEGER NOT NULL PRIMARY KEY, "variant_id" TEXT NOT NULL, "parent_id" TEXT NOT NULL, "name" TEXT NOT NULL, FOREIGN KEY ("variant_id") REFERENCES "shape" ("uuid") ON DELETE CASCADE, FOREIGN KEY ("parent_id") REFERENCES "shape" ("uuid") ON DELETE CASCADE)'
+            )
+            db.execute_sql(
+                'CREATE INDEX IF NOT EXISTS "composite_shape_association_variant_id" ON "composite_shape_association" ("variant_id")'
+            )
+            db.execute_sql(
+                'CREATE INDEX IF NOT EXISTS "composite_shape_association_parent_id" ON "composite_shape_association" ("parent_id")'
+            )
+
+            db.execute_sql(
+                'CREATE TABLE IF NOT EXISTS "toggle_composite" ("shape_id" TEXT NOT NULL PRIMARY KEY, "active_variant" TEXT, FOREIGN KEY ("shape_id") REFERENCES "shape" ("uuid"))'
+            )
+            db.execute_sql(
+                'CREATE INDEX IF NOT EXISTS "toggle_composite_shape_id" ON "toggle_composite" ("shape_id")'
+            )
+    elif version == 47:
+        # Fix ToggleComposite skipDraw type (from string to boolean)
+        with db.atomic():
+            data = db.execute_sql("SELECT uuid, options FROM shape")
+            for row in data.fetchall():
+                uuid, options = row
+                if options:
+                    try:
+                        options = dict(json.loads(options))
+                    except:
+                        logger.error(
+                            f"Could not read options for {uuid}, skipping this shape"
+                        )
+                        continue
+                    if options.get("skipDraw", False) == "true":
+                        options["skipDraw"] = True
+                        options = json.dumps([[k, v] for k, v in options.items()])
+                        db.execute_sql(
+                            "UPDATE shape SET options = ? WHERE uuid = ?",
+                            (options, uuid),
+                        )
+    elif version == 48:
+        # Add Shape.annotation_visible
+        with db.atomic():
+            db.execute_sql(
+                "ALTER TABLE shape ADD COLUMN annotation_visible INTEGER NOT NULL DEFAULT 0"
+            )
+    elif version == 49:
+        # Extend Aura
+        with db.atomic():
+            db.execute_sql(
+                "ALTER TABLE aura ADD COLUMN active INTEGER NOT NULL DEFAULT 1"
+            )
+            db.execute_sql(
+                "ALTER TABLE aura ADD COLUMN border_colour TEXT NOT NULL DEFAULT 'rgba(0,0,0,0)'"
+            )
+            db.execute_sql(
+                "ALTER TABLE aura ADD COLUMN angle INTEGER NOT NULL DEFAULT 360"
+            )
+            db.execute_sql(
+                "ALTER TABLE aura ADD COLUMN direction INTEGER NOT NULL DEFAULT 0"
+            )
+    elif version == 50:
+        # Add Location.archived
+        with db.atomic():
+            db.execute_sql(
+                "ALTER TABLE location ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"
+            )
+    elif version == 51:
+        # Add Circle.viewing_angle
+        with db.atomic():
+            db.execute_sql("ALTER TABLE circle ADD COLUMN viewing_angle REAL")
+            db.execute_sql("ALTER TABLE circular_token ADD COLUMN viewing_angle REAL")
     else:
         raise UnknownVersionException(
             f"No upgrade code for save format {version} was found."
@@ -704,7 +835,6 @@ def check_save():
                 logger.exception(e)
                 logger.error("ERROR: Could not start server")
                 sys.exit(2)
-                break
             else:
                 logger.warning(f"Upgrade to {save_version + 1} done.")
                 save_version = get_save_version()

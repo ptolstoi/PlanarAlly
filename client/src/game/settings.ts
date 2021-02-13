@@ -1,7 +1,9 @@
 import Vue from "vue";
 import { getModule, Module, Mutation, VuexModule } from "vuex-module-decorators";
+
 import { toSnakeCase } from "../core/utils";
 import { rootStore } from "../store";
+
 import { sendLocationOptions } from "./api/emits/location";
 import { LocationOptions } from "./comm/types/settings";
 import { layerManager } from "./layers/manager";
@@ -240,7 +242,7 @@ class GameSettingsStore extends VuexModule implements GameSettingsState {
     }
 
     @Mutation
-    async setSpawnLocations(data: { spawnLocations: string[]; location: number | null; sync: boolean }): Promise<void> {
+    setSpawnLocations(data: { spawnLocations: string[]; location: number | null; sync: boolean }): void {
         if (data.location === null) return;
         if (mutateLocationOption("spawnLocations", data.spawnLocations, data.location)) {
             layerManager.invalidateAllFloors();

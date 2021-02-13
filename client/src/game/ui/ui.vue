@@ -1,29 +1,28 @@
 <script lang="ts">
 import Vue from "vue";
-import vueSlider from "vue-slider-component";
 import "vue-slider-component/theme/default.css";
 import Component from "vue-class-component";
-
+import vueSlider from "vue-slider-component";
 import { mapState } from "vuex";
 
-import Annotation from "./Annotation.vue";
-import DmSettings from "@/game/ui/settings/dm/DmSettings.vue";
-import FloorSelect from "@/game/ui/floors.vue";
-import LocationBar from "./menu/locations.vue";
-import LocationSettings from "@/game/ui/settings/location/LocationSettings.vue";
 import MarkdownModal from "@/core/components/modals/MarkdownModal.vue";
+import FloorSelect from "@/game/ui/floors.vue";
 import MenuBar from "@/game/ui/menu/menu.vue";
 import SelectionInfo from "@/game/ui/selection/selection_info.vue";
+import DmSettings from "@/game/ui/settings/dm/DmSettings.vue";
+import LocationSettings from "@/game/ui/settings/location/LocationSettings.vue";
 import Tools from "@/game/ui/tools/tools.vue";
 
+import { coreStore } from "../../core/store";
+import { baseAdjust } from "../../core/utils";
 import { LocalPoint } from "../geom";
 import { gameStore } from "../store";
 import { l2g } from "../units";
-import { coreStore } from "../../core/store";
+
+import LocationBar from "./menu/locations.vue";
 
 @Component({
     components: {
-        Annotation,
         DmSettings,
         FloorSelect,
         LocationBar,
@@ -40,8 +39,7 @@ import { coreStore } from "../../core/store";
 })
 export default class UI extends Vue {
     $refs!: {
-        annotation: InstanceType<typeof Annotation>;
-        tools: InstanceType<typeof Tools>;
+        tools: Tools;
     };
 
     visible = {
@@ -49,6 +47,10 @@ export default class UI extends Vue {
         settings: false,
         topleft: false,
     };
+
+    baseAdjust(path: string): string {
+        return baseAdjust(path);
+    }
 
     get version(): { release: string; env: string } {
         return coreStore.version;
@@ -209,7 +211,6 @@ export default class UI extends Vue {
         <MarkdownModal v-if="showChangelog" :title="$t('game.ui.ui.new_ver_msg')">
             {{ $t("game.ui.ui.changelog_RELEASE_LOG", { release: version.release, log: changelog }) }}
         </MarkdownModal>
-        <Annotation ref="annotation"></Annotation>
         <!-- When updating zoom boundaries, also update store updateZoom function;
             should probably do this using a store variable-->
         <vueSlider
@@ -231,7 +232,7 @@ export default class UI extends Vue {
     </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 #ui {
     pointer-events: none;
     position: absolute;
@@ -263,24 +264,24 @@ export default class UI extends Vue {
     flex-direction: column;
     align-items: center;
     justify-content: space-evenly;
-}
 
-#logo-icons > a {
-    display: contents;
-}
+    > a {
+        display: contents;
 
-#logo-icons > a > img {
-    display: block;
-    max-width: 45%;
+        > img {
+            display: block;
+            max-width: 45%;
+        }
+    }
 }
 
 #logo-links {
     display: flex;
     justify-content: space-evenly;
-}
 
-#logo-links > a {
-    padding: 0 3px;
+    > a {
+        padding: 0 3px;
+    }
 }
 
 #logo-version {
@@ -325,85 +326,79 @@ export default class UI extends Vue {
     height: 200px;
     top: -100px;
     left: -100px;
-}
 
-.rm-wrapper .rm-topper {
-    pointer-events: none;
-    text-align: center;
-    line-height: 50px;
-    font-size: 25px;
-}
+    .rm-topper {
+        pointer-events: none;
+        text-align: center;
+        line-height: 50px;
+        font-size: 25px;
+    }
 
-.rm-wrapper .rm-toggler,
-.rm-wrapper .rm-topper {
-    display: block;
-    position: absolute;
-    width: 50px;
-    height: 50px;
-    left: 50%;
-    top: 50%;
-    margin-left: -25px;
-    margin-top: -25px;
-    background: #fa5a5a;
-    color: white;
-    border-radius: 50%;
-}
+    .rm-toggler,
+    .rm-topper {
+        display: block;
+        position: absolute;
+        width: 50px;
+        height: 50px;
+        left: 50%;
+        top: 50%;
+        margin-left: -25px;
+        margin-top: -25px;
+        background: #fa5a5a;
+        color: white;
+        border-radius: 50%;
 
-.rm-wrapper .rm-toggler .rm-list,
-.rm-wrapper .rm-topper .rm-list {
-    opacity: 0.5;
-    list-style: none;
-    padding: 0;
-    width: 200px;
-    height: 200px;
-    overflow: hidden;
-    display: block;
-    border-radius: 50%;
-    transform: rotate(180deg);
-    box-shadow: 0 0 10px 0 rgba(0, 0, 0, 0.2);
-    margin: -75px 0 0 -75px;
+        .rm-list {
+            opacity: 0.5;
+            list-style: none;
+            padding: 0;
+            width: 200px;
+            height: 200px;
+            overflow: hidden;
+            display: block;
+            border-radius: 50%;
+            transform: rotate(180deg);
+            box-shadow: 0 0 10px 0 rgba(0, 0, 0, 0.2);
+            margin: -75px 0 0 -75px;
+
+            .rm-item {
+                display: table;
+                width: 50%;
+                height: 50%;
+                float: left;
+                text-align: center;
+                box-shadow: inset 0 0 2px 0 rgba(0, 0, 0, 0.2);
+                background-color: white;
+
+                &:hover {
+                    background-color: #82c8a0;
+
+                    a {
+                        color: white;
+                    }
+                }
+
+                a {
+                    display: table-cell;
+                    vertical-align: middle;
+                    transform: rotate(-45deg);
+                    text-decoration: none;
+                    font-size: 25px;
+                    color: #82c8a0;
+                    border: none;
+                    outline: none;
+                }
+            }
+        }
+
+        &:hover .rm-list {
+            opacity: 1;
+        }
+    }
 }
 
 .rm-list-dm {
     transform: rotate(135deg) !important; /* total deg: 135 */
-}
-
-.rm-wrapper .rm-toggler:hover .rm-list,
-.rm-wrapper .rm-topper:hover .rm-list {
-    opacity: 1;
-}
-
-.rm-wrapper .rm-toggler .rm-list .rm-item,
-.rm-wrapper .rm-topper .rm-list .rm-item {
-    display: table;
-    width: 50%;
-    height: 50%;
-    float: left;
-    text-align: center;
-    box-shadow: inset 0 0 2px 0 rgba(0, 0, 0, 0.2);
-    background-color: white;
-}
-
-.rm-wrapper .rm-toggler .rm-list .rm-item:hover,
-.rm-wrapper .rm-topper .rm-list .rm-item:hover {
-    background-color: #82c8a0;
-}
-
-.rm-wrapper .rm-toggler .rm-list .rm-item:hover a,
-.rm-wrapper .rm-topper .rm-list .rm-item:hover a {
-    color: white;
-}
-
-.rm-wrapper .rm-toggler .rm-list .rm-item a,
-.rm-wrapper .rm-topper .rm-list .rm-item a {
-    display: table-cell;
-    vertical-align: middle;
-    transform: rotate(-45deg);
-    text-decoration: none;
-    font-size: 25px;
-    color: #82c8a0;
-    border: none;
-    outline: none;
 }
 
 .settingsfade-enter-active,
@@ -417,5 +412,75 @@ export default class UI extends Vue {
 .settingsfade-enter-to,
 .settingsfade-leave {
     width: 200px;
+}
+</style>
+
+<style lang="scss">
+.slider-checkbox {
+    display: block;
+    box-sizing: border-box;
+    border: none;
+    color: inherit;
+    background: none;
+    font: inherit;
+    line-height: inherit;
+    text-align: left;
+    padding: 0.4em 0 0.4em 4em;
+    position: relative;
+    outline: none;
+
+    &:hover {
+        cursor: pointer;
+
+        &::before {
+            box-shadow: 0 0 0.5em #333;
+        }
+
+        &::after {
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='50' cy='50' r='50' fill='rgba(0,0,0,.25)'/%3E%3C/svg%3E");
+            background-size: 30%;
+            background-repeat: no-repeat;
+            background-position: center center;
+        }
+    }
+
+    &::before,
+    &::after {
+        content: "";
+        position: absolute;
+        height: 1.1em;
+        transition: all 0.25s ease;
+        left: 0;
+    }
+
+    &::before {
+        width: 2.6em;
+        border: 0.2em solid #767676;
+        top: -0.2em;
+        background: #767676;
+        border-radius: 1.1em;
+    }
+
+    &::after {
+        background-color: #fff;
+        background-position: center center;
+        border-radius: 50%;
+        width: 1.1em;
+        border: 0.15em solid #767676;
+        top: -0.15em;
+    }
+
+    &[aria-pressed="true"] {
+        &::after {
+            left: 1.6em;
+            border-color: #36a829;
+            color: #36a829;
+        }
+
+        &::before {
+            background-color: #36a829;
+            border-color: #36a829;
+        }
+    }
 }
 </style>
