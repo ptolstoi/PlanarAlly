@@ -7,8 +7,8 @@ import { mapGetters } from "vuex";
 import AssetContextMenu from "@/assetManager/contextMenu.vue";
 import { socket } from "@/assetManager/socket";
 import { assetStore } from "@/assetManager/store";
-import { Asset } from "@/core/comm/types";
 import Prompt from "@/core/components/modals/prompt.vue";
+import { Asset } from "@/core/models/types";
 import { baseAdjust, uuidv4 } from "@/core/utils";
 
 Component.registerHooks(["beforeRouteEnter"]);
@@ -203,7 +203,7 @@ export default class AssetManager extends Vue {
                 <div @click="prepareUpload" :title="$t('assetManager.manager.upload_files')">
                     <font-awesome-icon icon="upload" />
                 </div>
-                <div @click="exportData" :title="$t('assetManager.manager.upload_files')">
+                <div @click="exportData" :title="$t('assetManager.manager.download_files')">
                     <font-awesome-icon icon="download" />
                 </div>
             </div>

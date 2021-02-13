@@ -8,6 +8,31 @@ These usually have no immediately visible impact on regular users
 
 ## Unreleased
 
+### Added
+
+-   Client setting to disable zoom behaviour on scroll
+-   Erase option to draw tool
+    -   This makes anything from the current floor below it in the draw stack in its region transparent
+-   Big red border when disconnected
+-   Option to make other players (co-)DM
+-   Show a small info popup when trying to join a locked session
+
+### Changed
+
+-   Client settings
+    -   Now open in a modal just like the DM settings
+    -   Now can be campaign-specific (with reset/make default options)
+-   Spell cone icon is now filled
+
+### Fixed
+
+-   It's no longer possible to create a floor with a name that is already in use
+-   Token properly snaps to mouse when leaving wall
+-   Template drops on non-default grid scales where not resized accordingly
+-   Some cases where a disconnect would happen without reconnect attempts
+-   Cause of slow session loading times
+    -   shape group info is now sent along during initial load
+
 ## [0.25.0] - 2021-02-07
 
 ### Added

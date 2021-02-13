@@ -2,9 +2,9 @@
 import Vue from "vue";
 import Component from "vue-class-component";
 
-import { SyncMode, InvalidationMode } from "@/core/comm/types";
 import ContextMenu from "@/core/components/contextmenu.vue";
 import Prompt from "@/core/components/modals/prompt.vue";
+import { SyncMode, InvalidationMode } from "@/core/models/types";
 import { baseAdjust, uuidv4 } from "@/core/utils";
 import { sendBringPlayers } from "@/game/api/emits/players";
 import { EventBus } from "@/game/event-bus";
@@ -96,7 +96,7 @@ export default class DefaultContext extends Vue {
         layerManager
             .getLayer(floorStore.currentFloor, "dm")!
             .addShape(shape, SyncMode.FULL_SYNC, InvalidationMode.NO, false);
-        img.onload = () => (gameStore.boardInitialized ? shape.layer.invalidate(true) : undefined);
+        img.onload = () => (gameStore.isBoardInitialized ? shape.layer.invalidate(true) : undefined);
 
         gameSettingsStore.setSpawnLocations({
             spawnLocations: [...spawnLocations, shape.uuid],

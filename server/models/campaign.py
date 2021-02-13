@@ -8,10 +8,11 @@ from peewee import (
     TextField,
 )
 from playhouse.shortcuts import model_to_dict
+from typing import Set
 
 from .base import BaseModel
-from .user import User
-from .utils import get_table
+from .groups import Group
+from .user import User, UserOptions
 
 __all__ = [
     "Floor",
@@ -164,6 +165,7 @@ class PlayerRoom(BaseModel):
     player = ForeignKeyField(User, backref="rooms_joined", on_delete="CASCADE")
     room = ForeignKeyField(Room, backref="players", on_delete="CASCADE")
     active_location = ForeignKeyField(Location, backref="players", on_delete="CASCADE")
+    user_options = ForeignKeyField(UserOptions, on_delete="CASCADE", null=True)
 
     def __repr__(self):
         return f"<PlayerRoom {self.room.get_path()} - {self.player.name}>"
@@ -236,9 +238,13 @@ class Layer(BaseModel):
             backrefs=False,
             exclude=[Layer.id, Layer.player_visible],
         )
-        data["shapes"] = [
-            shape.as_dict(user, dm) for shape in self.shapes.order_by(Shape.index)
-        ]
+        groups_added: Set[Group] = set()
+        data["groups"] = []
+        data["shapes"] = []
+        for shape in self.shapes.order_by(Shape.index):
+            data["shapes"].append(shape.as_dict(user, dm))
+            if shape.group and not shape.group.uuid in groups_added:
+                data["groups"].append(model_to_dict(shape.group))
         return data
 
     class Meta:

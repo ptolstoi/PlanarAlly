@@ -57,7 +57,7 @@ export default class FloorSelect extends Vue {
     }
 
     get layers(): string[] {
-        if (!gameStore.boardInitialized) return [];
+        if (!gameStore.isBoardInitialized) return [];
         return layerManager
             .getLayers(floorStore.currentFloor)
             .filter((l) => l.selectable && (gameStore.IS_DM || l.playerEditable))
@@ -80,8 +80,14 @@ export default class FloorSelect extends Vue {
         const value = await this.$refs.prompt.prompt(
             this.$t("game.ui.floors.new_name").toString(),
             this.$t("game.ui.floors.creation").toString(),
+            (value) => {
+                if (floorStore.floors.some((f) => f.name === value)) {
+                    return { valid: false, reason: "This name is already in use!" };
+                }
+                return { valid: true };
+            },
         );
-        if (value === undefined) return;
+        if (value === undefined || getFloorId(value) !== -1) return;
         sendCreateFloor(value);
     }
 

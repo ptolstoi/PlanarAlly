@@ -21,7 +21,8 @@
             "uploading": "Uploading files",
             "create_folder": "Create folder",
             "upload_files": "Upload files",
-            "title": "Asset manager"
+            "title": "Asset manager",
+            "download_files": "Download files"
         }
     },
     "common": {
@@ -62,7 +63,8 @@
         "vision": "Vision",
         "tokens": "Tokens",
         "shape": "Shape",
-        "colors": "Colours",
+        "colour": "Colour",
+        "colours": "Colours",
         "version": "version",
         "confirm": "Confirm",
         "cancel": "Cancel",
@@ -154,12 +156,7 @@
                     "no_notes": "No notes",
                     "dm_options": "DM Options",
                     "no_markers": "No markers",
-                    "client_options": "Client Options",
-                    "grid_size_in_pixels": "Grid Size (in pixels):",
-                    "grid_color_set": "Grid Colour:",
-                    "fow_color_set": "FOW Colour:",
-                    "ruler_color_set": "Ruler Colour:",
-                    "invert_alt_set": "Invert ALT behaviour"
+                    "client_options": "Client Options"
                 }
             },
             "note": {
@@ -217,6 +214,18 @@
                 }
             },
             "settings": {
+                "client": {
+                    "ClientSettings": {
+                        "client_settings": "Client Settings"
+                    },
+                    "AppearanceSettings": {
+                        "grid_size_in_pixels": "Size (in pixels):"
+                    },
+                    "BehaviourSettings": {
+                        "invert_alt_set": "Invert ALT behaviour",
+                        "disable_scroll_to_zoom": "Disable scroll to zoom"
+                    }
+                },
                 "dm": {
                     "AdminSettings": {
                         "delete_session_msg_CREATOR_ROOM": "ENTER {creator}/{room} TO CONFIRM CAMPAIGN REMOVAL.",
@@ -242,7 +251,8 @@
                 "common": {
                     "overridden_msg": "Some of these settings can be overriden by location specific settings",
                     "overridden_highlight": "highlighted",
-                    "reset_default": "Reset to the campaign default",
+                    "reset_default": "Reset to the default",
+                    "sync_default": "Make this the new default",
                     "overridden_highlight_path": "Settings that override the campaign defaults are {0}"
                 },
                 "GridSettings": {
@@ -364,7 +374,9 @@
         "paint-brush": "paint-brush",
         "normal": "normal",
         "reveal": "reveal",
-        "hide": "hide"
+        "hide": "hide",
+        "erase": "erase",
+        "cone": "cone"
     },
     "tool": {
         "Build": "Build",

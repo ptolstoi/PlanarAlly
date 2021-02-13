@@ -14,7 +14,7 @@ import { CircularToken } from "@/game/shapes/variants/circulartoken";
 import { gameStore } from "@/game/store";
 import { getUnitDistance, l2g } from "@/game/units";
 
-import { SyncMode, InvalidationMode, SyncTo } from "../../../core/comm/types";
+import { SyncMode, InvalidationMode, SyncTo } from "../../../core/models/types";
 import { gameSettingsStore } from "../../settings";
 
 @Component({
@@ -134,7 +134,7 @@ export default class CreateTokenModal extends Vue {
                 placeholder="X"
                 @keyup.enter="submit"
             />
-            <label v-t="'common.colors'"></label>
+            <label v-t="'common.colours'"></label>
             <div class="colours">
                 <span v-t="'game.ui.tools.createtoken_modal.fill'"></span>
                 <color-picker :color.sync="fillColour" />

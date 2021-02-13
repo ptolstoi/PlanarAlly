@@ -1,7 +1,7 @@
-import { InvalidationMode, SyncMode, SyncTo } from "@/core/comm/types";
-import { ServerShape } from "@/game/comm/types/shapes";
+import { InvalidationMode, SyncMode, SyncTo } from "@/core/models/types";
 import { EventBus } from "@/game/event-bus";
 import { layerManager } from "@/game/layers/manager";
+import { ServerShape } from "@/game/models/shapes";
 import { Shape } from "@/game/shapes/shape";
 import { createShapeFromDict } from "@/game/shapes/utils";
 import { gameStore } from "@/game/store";
@@ -269,6 +269,7 @@ export class Layer {
             // To optimize things slightly, we keep track of the shapes that passed the first round
             const visibleShapes: Shape[] = [];
 
+            // Aura draw loop
             for (const shape of this.shapes) {
                 if (shape.options.has("skipDraw") && shape.options.get("skipDraw")) continue;
                 if (!shape.visibleInCanvas(this.canvas, { includeAuras: true })) continue;
@@ -276,6 +277,7 @@ export class Layer {
                 drawAuras(shape, ctx);
                 visibleShapes.push(shape);
             }
+            // Normal shape draw loop
             for (const shape of visibleShapes) {
                 if (shape.isInvisible && !shape.ownedBy(true, { visionAccess: true })) continue;
                 if (shape.labels.length === 0 && gameStore.filterNoLabel) continue;

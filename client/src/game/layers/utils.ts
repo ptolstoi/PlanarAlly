@@ -1,11 +1,11 @@
-import { InvalidationMode, SyncMode } from "@/core/comm/types";
-import { ServerFloor, ServerLayer } from "@/game/comm/types/general";
+import { InvalidationMode, SyncMode } from "@/core/models/types";
 import { GlobalPoint, Vector } from "@/game/geom";
 import { FowLightingLayer } from "@/game/layers/fowlighting";
 import { FowVisionLayer } from "@/game/layers/fowvision";
 import { GridLayer } from "@/game/layers/grid";
 import { Layer } from "@/game/layers/layer";
 import { layerManager } from "@/game/layers/manager";
+import { ServerFloor, ServerLayer } from "@/game/models/general";
 import { Asset } from "@/game/shapes/variants/asset";
 import { clampGridLine, l2gx, l2gy, l2gz } from "@/game/units";
 import { visibilityStore } from "@/game/visibility/store";
@@ -15,7 +15,9 @@ import { baseAdjust, uuidv4 } from "../../core/utils";
 import i18n from "../../i18n";
 import { requestAssetOptions } from "../api/emits/asset";
 import { sendFloorChange, sendLayerChange } from "../api/emits/shape/core";
-import { BaseTemplate } from "../comm/types/templates";
+import { addNewGroup, hasGroup } from "../groups";
+import { groupToClient } from "../models/groups";
+import { BaseTemplate } from "../models/templates";
 import { addOperation } from "../operations/undo";
 import { gameSettingsStore } from "../settings";
 import { Shape } from "../shapes/shape";
@@ -93,6 +95,16 @@ async function createLayer(layerInfo: ServerLayer, floor: Floor): Promise<void> 
         return;
     }
     if (layerInfo.name !== "fow-players") layers.appendChild(canvas);
+
+    // Load layer groups
+
+    for (const serverGroup of layerInfo.groups) {
+        const group = groupToClient(serverGroup);
+        if (!hasGroup(group.uuid)) {
+            addNewGroup(group, false);
+        }
+    }
+
     // Load layer shapes
     await layer.setServerShapes(layerInfo.shapes);
 }

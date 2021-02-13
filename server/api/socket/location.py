@@ -1,7 +1,6 @@
 import json
-from typing import Any, Dict, List, Union
+from typing import List, Union
 
-from peewee import JOIN
 from playhouse.shortcuts import update_model_from_dict
 from typing_extensions import TypedDict
 
@@ -10,16 +9,13 @@ from api.socket.constants import GAME_NS
 from app import app, sio
 from models import (
     Floor,
-    Initiative,
     InitiativeLocationData,
-    Layer,
     Location,
     LocationOptions,
     LocationUserOption,
     Marker,
     Note,
     PlayerRoom,
-    Room,
     Shape,
 )
 from models.asset import Asset
@@ -96,9 +92,13 @@ async def load_location(sid: str, location: Location, *, complete=False):
     # 1. Load client options
 
     client_options = pr.player.as_dict()
-    client_options.update(
-        **LocationUserOption.get(user=pr.player, location=location).as_dict()
-    )
+    client_options["location_user_options"] = LocationUserOption.get(
+        user=pr.player, location=location
+    ).as_dict()
+    client_options["default_user_options"] = pr.player.default_options.as_dict()
+
+    if pr.user_options:
+        client_options["room_user_options"] = pr.user_options.as_dict()
 
     await sio.emit("Client.Options.Set", client_options, room=sid, namespace=GAME_NS)
 
@@ -154,9 +154,11 @@ async def load_location(sid: str, location: Location, *, complete=False):
 
     floors = [floor for floor in location.floors.order_by(Floor.index)]
 
-    if "active_floor" in client_options:
+    if "active_floor" in client_options["location_user_options"]:
         index = next(
-            i for i, f in enumerate(floors) if f.name == client_options["active_floor"]
+            i
+            for i, f in enumerate(floors)
+            if f.name == client_options["location_user_options"]["active_floor"]
         )
         lower_floors = floors[index - 1 :: -1] if index > 0 else []
         higher_floors = floors[index + 1 :] if index < len(floors) else []
@@ -165,7 +167,7 @@ async def load_location(sid: str, location: Location, *, complete=False):
     for floor in floors:
         await sio.emit(
             "Board.Floor.Set",
-            floor.as_dict(pr.player, pr.player == pr.room.creator),
+            floor.as_dict(pr.player, pr.role == Role.DM),
             room=sid,
             namespace=GAME_NS,
         )
