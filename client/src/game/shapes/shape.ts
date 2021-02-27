@@ -28,6 +28,7 @@ import {
     sendShapeUpdateDefaultOwner,
     sendShapeUpdateOwner,
 } from "../api/emits/access";
+import { sendShapeOptionsUpdate } from "../api/emits/shape/core";
 import {
     sendShapeAddLabel,
     sendShapeCreateAura,
@@ -41,6 +42,7 @@ import {
     sendShapeSetBlocksVision,
     sendShapeSetFillColour,
     sendShapeSetInvisible,
+    sendShapeSetDefeated,
     sendShapeSetIsToken,
     sendShapeSetLocked,
     sendShapeSetName,
@@ -84,6 +86,9 @@ export abstract class Shape {
     fillColour: string;
     strokeColour: string;
     strokeWidth = 5;
+    // When set to true this shape should not use g2lz converting logic for its sizing
+    // This is used for things like the ruler, which should always have the same size irregardles of zoom state
+    ignoreZoomSize = false;
     // The optional name associated with the shape
     name = "Unknown shape";
     nameVisible = true;
@@ -103,6 +108,7 @@ export abstract class Shape {
     // Does this shape represent a playable token
     isToken = false;
     isInvisible = false;
+    isDefeated = false;
     // Show a highlight box
     showHighlight = false;
 
@@ -327,7 +333,8 @@ export abstract class Shape {
             annotation_visible: this.annotationVisible,
             is_token: this.isToken,
             is_invisible: this.isInvisible,
-            options: this.getOptions(),
+            is_defeated: this.isDefeated,
+            options: JSON.stringify([...this.options]),
             badge: this.badge,
             show_badge: this.showBadge,
             is_locked: this.isLocked,
@@ -336,6 +343,7 @@ export abstract class Shape {
             default_vision_access: this.defaultAccess.vision,
             asset: this.assetId,
             group: this.groupId,
+            ignore_zoom_size: this.ignoreZoomSize,
         };
     }
     fromDict(data: ServerShape): void {
@@ -353,16 +361,20 @@ export abstract class Shape {
         this.strokeColour = data.stroke_colour;
         this.isToken = data.is_token;
         this.isInvisible = data.is_invisible;
+        this.isDefeated = data.is_defeated;
         this.nameVisible = data.name_visible;
         this.badge = data.badge;
         this.showBadge = data.show_badge;
         this.isLocked = data.is_locked;
         this.annotationVisible = data.annotation_visible;
+
+        this.ignoreZoomSize = data.ignore_zoom_size;
+
         if (data.annotation) {
             this.annotation = data.annotation;
         }
         if (data.name) this.name = data.name;
-        if (data.options) this.setOptions(data.options);
+        if (data.options) this.options = new Map(JSON.parse(data.options));
         if (data.asset) this.assetId = data.asset;
         if (data.group) this.groupId = data.group;
         // retain reactivity
@@ -374,14 +386,6 @@ export abstract class Shape {
             },
             SyncTo.UI,
         );
-    }
-
-    getOptions(): string {
-        return JSON.stringify([...this.options]);
-    }
-
-    setOptions(options: string): void {
-        this.options = new Map(JSON.parse(options));
     }
 
     getPositionRepresentation(): { angle: number; points: number[][] } {
@@ -432,6 +436,21 @@ export abstract class Shape {
             if (bbox === undefined) bbox = this.getBoundingBox();
             ctx.strokeStyle = "red";
             ctx.strokeRect(g2lx(bbox.topLeft.x) - 5, g2ly(bbox.topLeft.y) - 5, g2lz(bbox.w) + 10, g2lz(bbox.h) + 10);
+        }
+        if (this.isDefeated) {
+            bbox = this.getBoundingBox();
+            const crossTL = g2l(bbox.topLeft);
+            const crossBR = g2l(bbox.botRight);
+            const r = g2lz(10);
+            ctx.strokeStyle = "red";
+            ctx.fillStyle = this.strokeColour;
+            ctx.lineWidth = g2lz(2);
+            ctx.beginPath();
+            ctx.moveTo(crossTL.x + r, crossTL.y + r);
+            ctx.lineTo(crossBR.x - r, crossBR.y - r);
+            ctx.moveTo(crossTL.x + r, crossBR.y - r);
+            ctx.lineTo(crossBR.x - r, crossTL.y + r);
+            ctx.stroke();
         }
     }
 
@@ -561,6 +580,14 @@ export abstract class Shape {
         this.invalidate(!this.triggersVisionRecalc);
     }
 
+    setDefeated(isDefeated: boolean, syncTo: SyncTo): void {
+        if (syncTo === SyncTo.SERVER) sendShapeSetDefeated({ shape: this.uuid, value: isDefeated });
+        if (syncTo === SyncTo.UI) this._(activeShapeStore.setIsDefeated, { isDefeated, syncTo });
+
+        this.isDefeated = isDefeated;
+        this.invalidate(!this.triggersVisionRecalc);
+    }
+
     setStrokeColour(colour: string, syncTo: SyncTo): void {
         if (syncTo === SyncTo.SERVER) sendShapeSetStrokeColour({ shape: this.uuid, value: colour });
         if (syncTo === SyncTo.UI) this._(activeShapeStore.setStrokeColour, { colour, syncTo });
@@ -624,6 +651,16 @@ export abstract class Shape {
         this.showBadge = showBadge;
         this.invalidate(!this.triggersVisionRecalc);
         EventBus.$emit("EditDialog.Group.Update");
+    }
+
+    // OPTIONS
+
+    setOptions(options: Map<string, any>, syncTo: SyncTo): void {
+        this.options = options;
+
+        if (syncTo === SyncTo.SERVER) sendShapeOptionsUpdate([this], false);
+        if (syncTo === SyncTo.UI)
+            this._(activeShapeStore.setOptions, { options: Object.fromEntries(this.options), syncTo });
     }
 
     // ACCESS

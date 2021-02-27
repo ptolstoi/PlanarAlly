@@ -51,6 +51,7 @@ class Shape(BaseModel):
     default_edit_access = BooleanField(default=False)
     default_vision_access = BooleanField(default=False)
     is_invisible = BooleanField(default=False)
+    is_defeated = BooleanField(default=False)
     default_movement_access = BooleanField(default=False)
     is_locked = BooleanField(default=False)
     angle = FloatField(default=0)
@@ -58,6 +59,7 @@ class Shape(BaseModel):
     asset = ForeignKeyField(Asset, backref="shapes", null=True, default=None)
     group = ForeignKeyField(Group, backref="members", null=True, default=None)
     annotation_visible = BooleanField(default=False)
+    ignore_zoom_size = BooleanField(default=False)
 
     def __repr__(self):
         return f"<Shape {self.get_path()}>"
@@ -269,7 +271,7 @@ class Rect(BaseRect):
 
 class Text(ShapeType):
     text = TextField()
-    font = TextField()
+    font_size = IntegerField()
 
 
 class ToggleComposite(ShapeType):

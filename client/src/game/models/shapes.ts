@@ -26,6 +26,7 @@ export interface ServerShape {
     annotation_visible: boolean;
     is_token: boolean;
     is_invisible: boolean;
+    is_defeated: boolean;
     options?: string;
     badge: number;
     show_badge: boolean;
@@ -35,6 +36,7 @@ export interface ServerShape {
     default_vision_access: boolean;
     asset?: number;
     group?: string;
+    ignore_zoom_size: boolean;
 }
 
 interface ServerShapeAccess {
@@ -75,8 +77,7 @@ export interface ServerPolygon extends ServerShape {
 }
 export interface ServerText extends ServerShape {
     text: string;
-    font: string;
-    angle: number;
+    font_size: number;
 }
 
 export interface ServerToggleComposite extends ServerShape {

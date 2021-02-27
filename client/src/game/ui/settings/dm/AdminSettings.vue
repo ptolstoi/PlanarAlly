@@ -2,7 +2,7 @@
 import Vue from "vue";
 import Component from "vue-class-component";
 
-import InputCopyElement from "@/core/components/inputCopy.vue";
+import InputCopyElement from "@/core/components/InputCopyElement.vue";
 import Prompt from "@/core/components/modals/prompt.vue";
 import { sendDeleteRoom, sendRefreshInviteCode } from "@/game/api/emits/room";
 import { EventBus } from "@/game/event-bus";
@@ -34,7 +34,7 @@ export default class AdminSettings extends Vue {
     }
 
     get invitationUrl(): string {
-        return window.location.protocol + "//" + window.location.host + "/invite/" + gameStore.invitationCode;
+        return window.location.protocol + "//" + gameStore.publicName + "/invite/" + gameStore.invitationCode;
     }
     get locked(): boolean {
         return gameStore.isLocked;
@@ -53,6 +53,7 @@ export default class AdminSettings extends Vue {
         this.refreshState = "pending";
         this.showRefreshState = true;
     }
+
     kickPlayer(id: number): void {
         gameStore.kickPlayer(id);
     }

@@ -26,6 +26,8 @@ from utils import logger
 
 from .initiative import send_client_initiatives
 
+from config import config
+
 
 # DATA CLASSES FOR TYPE CHECKING
 class LocationOptionKeys(TypedDict, total=False):
@@ -122,6 +124,7 @@ async def load_location(sid: str, location: Location, *, complete=False):
                     }
                     for rp in pr.room.players
                 ],
+                "publicName": config.get("General", "public_name", fallback=""),
             },
             room=sid,
             namespace=GAME_NS,

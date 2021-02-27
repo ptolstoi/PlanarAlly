@@ -62,6 +62,8 @@ class GameStore extends VuexModule implements GameState {
     roomName = "";
     roomCreator = "";
     invitationCode = "";
+    publicName = window.location.host;
+
     players: Player[] = [];
 
     defaultClientOptions: UserOptions = {
@@ -91,7 +93,6 @@ class GameStore extends VuexModule implements GameState {
     panY = 0;
 
     zoomDisplay = 0.5;
-    // zoomFactor = 1;
 
     annotations: string[] = [];
     private _ownedtokens: string[] = [];
@@ -177,7 +178,6 @@ class GameStore extends VuexModule implements GameState {
         if (zoom === this.zoomDisplay) return;
         if (zoom < 0) zoom = 0;
         if (zoom > 1) zoom = 1;
-        // const gf = this.gridSize / DEFAULT_GRID_SIZE;
         this.zoomDisplay = zoom;
         layerManager.invalidateAllFloors();
     }
@@ -245,6 +245,12 @@ class GameStore extends VuexModule implements GameState {
     @Mutation
     setInvitationCode(code: string): void {
         this.invitationCode = code;
+    }
+
+    @Mutation
+    setPublicName(name: string): void {
+        if (!name.length) return;
+        this.publicName = name;
     }
 
     @Mutation

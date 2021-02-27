@@ -16,6 +16,16 @@ These usually have no immediately visible impact on regular users
 -   Big red border when disconnected
 -   Option to make other players (co-)DM
 -   Show a small info popup when trying to join a locked session
+-   Option to load wall info from an accompanying svg file
+-   Support for dungeondraft dd2vtt files
+    -   When placed on the board, a special 'apply ddraft' button is available in the extra settings to load the walls/portals/lights
+-   Text shape to the draw tool
+    -   When you click somewhere, a modal will appear to ask for the text
+-   Code to set a public hostname to be used when updating the invitation url by reading from server_config.cfg
+    "general -> public_name". If the public_name is empty or does not exists it falls back to normal operation.
+-   Added code to planarally.py to display the warning about the template directory if not running in
+    dev mode.
+-   Added ability to put a cross through tokens to mark them as defeated using a toggle in the token properties or by selecting them and pressing 'x'
 
 ### Changed
 
@@ -23,6 +33,17 @@ These usually have no immediately visible impact on regular users
     -   Now open in a modal just like the DM settings
     -   Now can be campaign-specific (with reset/make default options)
 -   Spell cone icon is now filled
+-   Ctrl keybindings now use Cmd on mac
+-   OpenSans font is now loaded from the server itself instead of google fonts
+-   Ruler size is now always the same size on your screen irregardles of zoom
+-   Ping size is now always the same size on your screen irregardles of zoom
+-   Dashboard redesign (page after login)
+    -   general UI overhaul
+    -   option to set a logo for a session
+    -   option to put personal notes
+    -   shows last playtime for your account
+    -   direct access to the asset manager
+    -   (asset manager and settings will at a later time be integrated)
 
 ### Fixed
 
@@ -32,6 +53,9 @@ These usually have no immediately visible impact on regular users
 -   Some cases where a disconnect would happen without reconnect attempts
 -   Cause of slow session loading times
     -   shape group info is now sent along during initial load
+-   Shapes with a variant always appearing to other players
+-   Context menus going offscreen
+-   Navigating backwards (by mouse or with browser controls) not working
 
 ## [0.25.0] - 2021-02-07
 
